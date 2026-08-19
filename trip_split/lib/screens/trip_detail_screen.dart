@@ -3,12 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:trip_split/screens/add_expense_screen.dart';
 import '../models/enums.dart';
-import '../models/expense.dart';
 import '../models/group.dart';
 import '../models/person.dart';
 import '../models/trip.dart';
+import '../providers/auth_provider.dart';
 import '../providers/trip_provider.dart';
 import '../services/calculation_service.dart';
+import '../services/pdf_service.dart';
 import 'settlement_screen.dart';
 
 class TripDetailScreen extends StatefulWidget {
@@ -42,6 +43,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> with SingleTickerPr
         final trip = provider.getTrip(widget.tripId);
         if (trip == null) return const Scaffold(body: Center(child: Text('Trip not found')));
 
+        final auth = context.read<AuthProvider>();
+
         return Scaffold(
           body: NestedScrollView(
             headerSliverBuilder: (context, innerBoxIsScrolled) {
@@ -51,6 +54,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> with SingleTickerPr
                   floating: true,
                   pinned: true,
                   actions: [
+                    IconButton(
+                      icon: const Icon(Icons.picture_as_pdf),
+                      onPressed: () {
+                        PdfService.downloadOrPrintPdf(trip: trip, currentUser: auth.currentUser);
+                      },
+                      tooltip: 'Download PDF Report',
+                    ),
                     IconButton(
                       icon: const Icon(Icons.account_balance),
                       onPressed: () {
@@ -102,7 +112,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> with SingleTickerPr
                                   Text(
                                     'Total Expenses',
                                     style: TextStyle(
-                                      color: Theme.of(context).colorScheme.onPrimaryContainer.withOpacity(0.8),
+                                      color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
                                     ),
                                   ),
                                   const SizedBox(height: 4),
@@ -120,7 +130,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> with SingleTickerPr
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.onPrimaryContainer.withOpacity(0.1),
+                                color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Icon(
@@ -158,7 +168,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> with SingleTickerPr
               ],
             ),
           ),
-          floatingActionButton: FloatingActionButton(
+          floatingActionButton: FloatingActionButton.extended(
             onPressed: () {
               if (_tabController.index == 0) {
                 _showAddGroupDialog(context, trip);
@@ -166,7 +176,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> with SingleTickerPr
                 _showAddExpenseDialog(context, trip);
               }
             },
-            child: const Icon(Icons.add),
+            icon: const Icon(Icons.add),
+            label: Text(_tabController.index == 0 ? 'Add Group' : 'Add Expense'),
           ),
         );
       },
@@ -301,6 +312,21 @@ class _GroupCard extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         subtitle: Text('${group.members.length} members'),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, size: 20),
+              tooltip: 'Edit Group Name',
+              onPressed: () => _showEditGroupDialog(context),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+              tooltip: 'Delete Group',
+              onPressed: () => _confirmDeleteGroup(context),
+            ),
+          ],
+        ),
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -309,14 +335,14 @@ class _GroupCard extends StatelessWidget {
                 ...group.members.map((member) => ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: CircleAvatar(
-                        backgroundColor: member.dietType.color.withOpacity(0.2),
+                        backgroundColor: member.dietType.color.withValues(alpha: 0.2),
                         child: Icon(
                           _getDietIcon(member.dietType),
                           color: member.dietType.color,
                           size: 18,
                         ),
                       ),
-                      title: Text(member.name),
+                      title: Text(member.name, style: const TextStyle(fontWeight: FontWeight.w600)),
                       subtitle: Text(
                         member.dietType.label,
                         style: TextStyle(
@@ -324,11 +350,22 @@ class _GroupCard extends StatelessWidget {
                           fontSize: 12,
                         ),
                       ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.red),
-                        onPressed: () {
-                          context.read<TripProvider>().deletePerson(tripId, group.id, member.id);
-                        },
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit, size: 18, color: Colors.indigo),
+                            tooltip: 'Edit Member',
+                            onPressed: () => _showPersonDialog(context, personToEdit: member),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                            tooltip: 'Delete Member',
+                            onPressed: () {
+                              context.read<TripProvider>().deletePerson(tripId, group.id, member.id);
+                            },
+                          ),
+                        ],
                       ),
                     )),
                 const Divider(),
@@ -339,10 +376,58 @@ class _GroupCard extends StatelessWidget {
                     child: Icon(Icons.add, color: Colors.black54),
                   ),
                   title: const Text('Add Person'),
-                  onTap: () => _showAddPersonDialog(context),
+                  onTap: () => _showPersonDialog(context),
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditGroupDialog(BuildContext context) {
+    final controller = TextEditingController(text: group.name);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Group Name'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'Group Name'),
+          textCapitalization: TextCapitalization.words,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              if (controller.text.trim().isNotEmpty) {
+                context.read<TripProvider>().editGroup(tripId, group.id, controller.text.trim());
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteGroup(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete "${group.name}"?'),
+        content: const Text('This will delete the group and all its members.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              context.read<TripProvider>().deleteGroup(tripId, group.id);
+              Navigator.pop(context);
+            },
+            child: const Text('Delete'),
           ),
         ],
       ),
@@ -360,9 +445,10 @@ class _GroupCard extends StatelessWidget {
     }
   }
 
-  void _showAddPersonDialog(BuildContext context) {
-    final nameController = TextEditingController();
-    DietType selectedDiet = DietType.nonVegetarian;
+  void _showPersonDialog(BuildContext context, {Person? personToEdit}) {
+    final isEditing = personToEdit != null;
+    final nameController = TextEditingController(text: isEditing ? personToEdit.name : '');
+    DietType selectedDiet = isEditing ? personToEdit.dietType : DietType.nonVegetarian;
 
     showModalBottomSheet(
       context: context,
@@ -385,7 +471,7 @@ class _GroupCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Add Person to ${group.name}',
+                    isEditing ? 'Edit ${personToEdit.name}' : 'Add Person to ${group.name}',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 24),
@@ -399,7 +485,7 @@ class _GroupCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    'Diet Preference',
+                    'Diet / Expense Preference',
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                   const SizedBox(height: 12),
@@ -419,18 +505,29 @@ class _GroupCard extends StatelessWidget {
                   const SizedBox(height: 24),
                   FilledButton(
                     onPressed: () {
-                      if (nameController.text.trim().isNotEmpty) {
-                        context.read<TripProvider>().addPerson(
-                              tripId,
-                              group.id,
-                              nameController.text.trim(),
-                              selectedDiet,
-                            );
+                      final name = nameController.text.trim();
+                      if (name.isNotEmpty) {
+                        if (isEditing) {
+                          context.read<TripProvider>().editPerson(
+                                tripId,
+                                group.id,
+                                personToEdit.id,
+                                name,
+                                selectedDiet,
+                              );
+                        } else {
+                          context.read<TripProvider>().addPerson(
+                                tripId,
+                                group.id,
+                                name,
+                                selectedDiet,
+                              );
+                        }
                         Navigator.pop(context);
                       }
                     },
                     style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                    child: const Text('Add Person', style: TextStyle(fontSize: 16)),
+                    child: Text(isEditing ? 'Save Changes' : 'Add Person', style: const TextStyle(fontSize: 16)),
                   ),
                   const SizedBox(height: 24),
                 ],
@@ -477,7 +574,7 @@ class _ExpensesTab extends StatelessWidget {
       itemBuilder: (context, index) {
         final expense = trip.expenses.reversed.toList()[index];
         final payer = trip.allMembers.firstWhere(
-          (m) => m?.id == expense.paidById,
+          (m) => m.id == expense.paidById,
           orElse: () => Person(id: '', name: 'Unknown', dietType: DietType.vegetarian),
         );
 
@@ -499,8 +596,19 @@ class _ExpensesTab extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 12),
             child: ListTile(
               contentPadding: const EdgeInsets.all(16),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AddExpenseScreen(
+                      tripId: trip.id,
+                      expenseToEdit: expense,
+                    ),
+                  ),
+                );
+              },
               leading: CircleAvatar(
-                backgroundColor: expense.category.color.withOpacity(0.2),
+                backgroundColor: expense.category.color.withValues(alpha: 0.2),
                 child: Icon(expense.category.icon, color: expense.category.color),
               ),
               title: Text(
@@ -519,13 +627,34 @@ class _ExpensesTab extends StatelessWidget {
                   ),
                 ],
               ),
-              trailing: Text(
-                '₹${expense.amount.toStringAsFixed(2)}',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '₹${expense.amount.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.edit, size: 18, color: Colors.indigo),
+                    tooltip: 'Edit Expense',
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AddExpenseScreen(
+                            tripId: trip.id,
+                            expenseToEdit: expense,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
           ),

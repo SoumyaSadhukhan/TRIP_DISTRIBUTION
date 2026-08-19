@@ -1,14 +1,55 @@
 // lib/screens/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/trip.dart';
+import '../providers/auth_provider.dart';
 import '../providers/trip_provider.dart';
 import 'trip_detail_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
+  void _confirmLogout(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.logout, color: Colors.red),
+            SizedBox(width: 10),
+            Text('Log Out'),
+          ],
+        ),
+        content: const Text(
+          'Are you sure you want to log out? All your data is safely saved and will be available when you sign in again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+            ),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              context.read<TripProvider>().clearTrips();
+              context.read<AuthProvider>().logout();
+            },
+            child: const Text('Log Out'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final username = auth.currentUser?.username ?? 'User';
+
     return Scaffold(
       body: CustomScrollView(
         slivers: [
@@ -16,10 +57,31 @@ class HomeScreen extends StatelessWidget {
             expandedHeight: 180,
             floating: true,
             pinned: true,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.logout, color: Colors.white),
+                tooltip: 'Log Out ($username)',
+                onPressed: () => _confirmLogout(context),
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
-              title: const Text(
-                'TripSplit',
-                style: TextStyle(fontWeight: FontWeight.bold),
+              title: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'EquiTrip',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  Text(
+                    '👤 $username',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.normal,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ],
               ),
               background: Container(
                 decoration: BoxDecoration(
@@ -34,7 +96,7 @@ class HomeScreen extends StatelessWidget {
                 ),
                 child: const Center(
                   child: Icon(
-                    Icons.account_balance_wallet,
+                    Icons.explore_rounded,
                     size: 64,
                     color: Colors.white24,
                   ),
@@ -47,11 +109,12 @@ class HomeScreen extends StatelessWidget {
               builder: (context, provider, child) {
                 if (provider.trips.isEmpty) {
                   return Padding(
-                    padding: const EdgeInsets.all(48.0),
+                    padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 24),
                     child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          Icons.card_travel,
+                          Icons.flight_takeoff,
                           size: 80,
                           color: Colors.grey.shade300,
                         ),
@@ -59,9 +122,9 @@ class HomeScreen extends StatelessWidget {
                         Text(
                           'No trips yet',
                           style: TextStyle(
-                            fontSize: 20,
-                            color: Colors.grey.shade600,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey.shade700,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -123,7 +186,7 @@ class HomeScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const SizedBox(height: 4),
-                              Text('$memberCount people • ${trip.expenses.length} expenses'),
+                              Text('$memberCount people | ${trip.expenses.length} expenses'),
                               const SizedBox(height: 4),
                               Text(
                                 'Total: ₹${total.toStringAsFixed(2)}',
@@ -134,7 +197,17 @@ class HomeScreen extends StatelessWidget {
                               ),
                             ],
                           ),
-                          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit_outlined, size: 20),
+                                tooltip: 'Edit Trip Details',
+                                onPressed: () => _showTripDialog(context, tripToEdit: trip),
+                              ),
+                              const Icon(Icons.chevron_right),
+                            ],
+                          ),
                           onTap: () {
                             Navigator.push(
                               context,
@@ -154,16 +227,17 @@ class HomeScreen extends StatelessWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showCreateTripDialog(context),
+        onPressed: () => _showTripDialog(context),
         icon: const Icon(Icons.add),
         label: const Text('New Trip'),
       ),
     );
   }
 
-  void _showCreateTripDialog(BuildContext context) {
-    final nameController = TextEditingController();
-    final descController = TextEditingController();
+  void _showTripDialog(BuildContext context, {Trip? tripToEdit}) {
+    final isEditing = tripToEdit != null;
+    final nameController = TextEditingController(text: isEditing ? tripToEdit.name : '');
+    final descController = TextEditingController(text: isEditing ? (tripToEdit.description ?? '') : '');
 
     showModalBottomSheet(
       context: context,
@@ -184,7 +258,7 @@ class HomeScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Create New Trip',
+                isEditing ? 'Edit Trip' : 'Create New Trip',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -212,18 +286,27 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 24),
               FilledButton(
                 onPressed: () {
-                  if (nameController.text.trim().isNotEmpty) {
-                    context.read<TripProvider>().addTrip(
-                          nameController.text.trim(),
-                          description: descController.text.trim(),
-                        );
+                  final name = nameController.text.trim();
+                  if (name.isNotEmpty) {
+                    if (isEditing) {
+                      context.read<TripProvider>().editTrip(
+                            tripToEdit.id,
+                            name,
+                            newDescription: descController.text.trim(),
+                          );
+                    } else {
+                      context.read<TripProvider>().addTrip(
+                            name,
+                            description: descController.text.trim(),
+                          );
+                    }
                     Navigator.pop(context);
                   }
                 },
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                child: const Text('Create Trip', style: TextStyle(fontSize: 16)),
+                child: Text(isEditing ? 'Save Changes' : 'Create Trip', style: const TextStyle(fontSize: 16)),
               ),
               const SizedBox(height: 24),
             ],

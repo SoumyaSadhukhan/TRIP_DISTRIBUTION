@@ -1,7 +1,6 @@
 // lib/models/enums.dart
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
+
 
 enum ExpenseCategory {
   veg('Vegetarian', Icons.eco, Colors.green),

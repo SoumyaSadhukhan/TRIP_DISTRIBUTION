@@ -1,8 +1,8 @@
 // lib/services/calculation_service.dart
 import '../models/enums.dart';
-import '../models/expense.dart';
 import '../models/person.dart';
 import '../models/trip.dart';
+
 
 class SettlementResult {
   final String fromId;

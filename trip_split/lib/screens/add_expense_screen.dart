@@ -10,8 +10,13 @@ import '../services/calculation_service.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final String tripId;
+  final Expense? expenseToEdit;
 
-  const AddExpenseScreen({super.key, required this.tripId});
+  const AddExpenseScreen({
+    super.key,
+    required this.tripId,
+    this.expenseToEdit,
+  });
 
   @override
   State<AddExpenseScreen> createState() => _AddExpenseScreenState();
@@ -25,6 +30,30 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   ExpenseCategory _selectedCategory = ExpenseCategory.mixed;
   String? _selectedPayerId;
   List<String> _selectedParticipants = [];
+  bool _initialized = false;
+
+  bool get _isEditing => widget.expenseToEdit != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isEditing) {
+      final exp = widget.expenseToEdit!;
+      _descController.text = exp.description;
+      _amountController.text = exp.amount.toStringAsFixed(2);
+      _selectedCategory = exp.category;
+      _selectedPayerId = exp.paidById;
+      _selectedParticipants = List.from(exp.splitAmongIds);
+      _initialized = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    _descController.dispose();
+    _amountController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,20 +65,21 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         final allMembers = trip.allMembers;
         final eligibleParticipants = CalculationService.getEligibleParticipants(_selectedCategory, allMembers);
 
-        // Auto-select eligible participants when category changes
-        if (!eligibleParticipants.toSet().containsAll(_selectedParticipants)) {
+        // Auto-select eligible participants for new expense on initial build
+        if (!_initialized) {
           _selectedParticipants = List.from(eligibleParticipants);
+          _initialized = true;
         }
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Add Expense'),
+            title: Text(_isEditing ? 'Edit Expense' : 'Add Expense'),
             actions: [
               TextButton(
                 onPressed: _selectedPayerId != null && _descController.text.isNotEmpty && _amountController.text.isNotEmpty
                     ? () => _saveExpense(trip)
                     : null,
-                child: const Text('Save', style: TextStyle(fontSize: 16)),
+                child: const Text('Save', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -66,6 +96,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     prefixIcon: Icon(Icons.edit),
                   ),
                   textCapitalization: TextCapitalization.sentences,
+                  onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 20),
                 TextField(
@@ -76,6 +107,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     prefixIcon: Icon(Icons.currency_rupee),
                   ),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 24),
                 Text(
@@ -97,7 +129,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         color: isSelected ? Colors.white : null,
                         fontWeight: isSelected ? FontWeight.bold : null,
                       ),
-                      onSelected: (_) => setState(() => _selectedCategory = category),
+                      onSelected: (_) {
+                        setState(() {
+                          _selectedCategory = category;
+                          final newEligible = CalculationService.getEligibleParticipants(category, allMembers);
+                          _selectedParticipants = List.from(newEligible);
+                        });
+                      },
                     );
                   }).toList(),
                 ),
@@ -105,7 +143,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+                    color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -133,7 +171,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 ...allMembers.map((member) => RadioListTile<String>(
                       title: Text(member.name),
                       secondary: CircleAvatar(
-                        backgroundColor: member.dietType.color.withOpacity(0.2),
+                        backgroundColor: member.dietType.color.withValues(alpha: 0.2),
                         child: Text(member.name[0].toUpperCase()),
                       ),
                       value: member.id,
@@ -167,7 +205,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   return CheckboxListTile(
                     title: Text(member.name),
                     secondary: CircleAvatar(
-                      backgroundColor: member.dietType.color.withOpacity(0.2),
+                      backgroundColor: member.dietType.color.withValues(alpha: 0.2),
                       child: Text(member.name[0].toUpperCase()),
                     ),
                     value: isSelected,
@@ -208,17 +246,30 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       return;
     }
 
-    final expense = Expense(
-      id: _uuid.v4(),
-      description: _descController.text.trim(),
-      amount: amount,
-      category: _selectedCategory,
-      paidById: _selectedPayerId!,
-      date: DateTime.now(),
-      splitAmongIds: List.from(_selectedParticipants),
-    );
+    if (_isEditing) {
+      final updated = Expense(
+        id: widget.expenseToEdit!.id,
+        description: _descController.text.trim(),
+        amount: amount,
+        category: _selectedCategory,
+        paidById: _selectedPayerId!,
+        date: widget.expenseToEdit!.date,
+        splitAmongIds: List.from(_selectedParticipants),
+      );
+      context.read<TripProvider>().editExpense(trip.id, updated);
+    } else {
+      final expense = Expense(
+        id: _uuid.v4(),
+        description: _descController.text.trim(),
+        amount: amount,
+        category: _selectedCategory,
+        paidById: _selectedPayerId!,
+        date: DateTime.now(),
+        splitAmongIds: List.from(_selectedParticipants),
+      );
+      context.read<TripProvider>().addExpense(trip.id, expense);
+    }
 
-    context.read<TripProvider>().addExpense(trip.id, expense);
     Navigator.pop(context);
   }
-}
+}
