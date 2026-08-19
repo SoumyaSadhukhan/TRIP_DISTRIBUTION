@@ -9,38 +9,80 @@ import 'trip_detail_screen.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
+  static const List<Color> _cardGradients = [
+    Color(0xFF4F46E5),
+    Color(0xFF7C3AED),
+    Color(0xFF0891B2),
+    Color(0xFF059669),
+    Color(0xFFD97706),
+    Color(0xFFDC2626),
+  ];
+
   void _confirmLogout(BuildContext context) {
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.logout, color: Colors.red),
-            SizedBox(width: 10),
-            Text('Log Out'),
-          ],
-        ),
-        content: const Text(
-          'Are you sure you want to log out? All your data is safely saved and will be available when you sign in again.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+      builder: (dialogContext) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.logout_rounded, color: Colors.red.shade600, size: 28),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Log Out?',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Your data is safely saved and will be available when you sign in again.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        side: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      child: const Text('Cancel', style: TextStyle(color: Color(0xFF374151))),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.red.shade600,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(dialogContext);
+                        context.read<TripProvider>().clearTrips();
+                        context.read<AuthProvider>().logout();
+                      },
+                      child: const Text('Log Out'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.red.shade600,
-            ),
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              context.read<TripProvider>().clearTrips();
-              context.read<AuthProvider>().logout();
-            },
-            child: const Text('Log Out'),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -53,99 +95,186 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
+          // ── Premium SliverAppBar ─────────────────────────────────
           SliverAppBar(
-            expandedHeight: 180,
-            floating: true,
+            expandedHeight: 200,
+            floating: false,
             pinned: true,
+            stretch: true,
             actions: [
               IconButton(
-                icon: const Icon(Icons.logout, color: Colors.white),
-                tooltip: 'Log Out ($username)',
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.logout_rounded, color: Colors.white, size: 20),
+                ),
+                tooltip: 'Log Out',
                 onPressed: () => _confirmLogout(context),
               ),
+              const SizedBox(width: 8),
             ],
             flexibleSpace: FlexibleSpaceBar(
+              titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
               title: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
                     'EquiTrip',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 20,
+                      color: Colors.white,
+                      letterSpacing: -0.3,
+                    ),
                   ),
                   Text(
-                    '👤 $username',
-                    style: const TextStyle(
+                    'Hello, $username 👋',
+                    style: TextStyle(
                       fontSize: 11,
-                      fontWeight: FontWeight.normal,
-                      color: Colors.white70,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white.withValues(alpha: 0.8),
                     ),
                   ),
                 ],
               ),
               background: Container(
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Theme.of(context).colorScheme.primary,
-                      Theme.of(context).colorScheme.tertiary,
+                      Color(0xFF312E81),
+                      Color(0xFF4F46E5),
+                      Color(0xFF7C3AED),
                     ],
+                    stops: [0.0, 0.5, 1.0],
                   ),
                 ),
-                child: const Center(
-                  child: Icon(
-                    Icons.explore_rounded,
-                    size: 64,
-                    color: Colors.white24,
-                  ),
+                child: Stack(
+                  children: [
+                    // Decorative circles
+                    Positioned(
+                      right: -20,
+                      top: -20,
+                      child: Container(
+                        width: 160,
+                        height: 160,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withValues(alpha: 0.06),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 60,
+                      bottom: 20,
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withValues(alpha: 0.05),
+                        ),
+                      ),
+                    ),
+                    // App logo watermark
+                    Positioned(
+                      right: 20,
+                      top: 28,
+                      child: Opacity(
+                        opacity: 0.25,
+                        child: Image.asset(
+                          'assets/icon/applogo.png',
+                          width: 70,
+                          height: 70,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
+
+          // ── Stats summary bar ────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Consumer<TripProvider>(
+              builder: (context, provider, _) {
+                final tripCount = provider.trips.length;
+                final totalSpend = provider.trips.fold<double>(
+                  0,
+                  (sum, t) => sum + provider.getTotalExpense(t.id),
+                );
+                return Container(
+                  margin: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4F46E5).withValues(alpha: 0.35),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _statItem('Trips', '$tripCount', Icons.flight_takeoff_rounded),
+                      ),
+                      Container(width: 1, height: 40, color: Colors.white.withValues(alpha: 0.25)),
+                      Expanded(
+                        child: _statItem('Total Spend', '₹${totalSpend.toStringAsFixed(0)}', Icons.account_balance_wallet_rounded),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // ── Section header ───────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
+              child: Text(
+                'Your Trips',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.grey.shade900,
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ),
+          ),
+
+          // ── Trip list ────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Consumer<TripProvider>(
               builder: (context, provider, child) {
                 if (provider.trips.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 24),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.flight_takeoff,
-                          size: 80,
-                          color: Colors.grey.shade300,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No trips yet',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey.shade700,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Create a trip to start splitting expenses',
-                          style: TextStyle(color: Colors.grey.shade500),
-                        ),
-                      ],
-                    ),
-                  );
+                  return _buildEmptyState();
                 }
 
                 return ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
                   itemCount: provider.trips.length,
                   itemBuilder: (context, index) {
                     final trip = provider.trips[index];
                     final total = provider.getTotalExpense(trip.id);
                     final memberCount = trip.allMembers.length;
+                    final accent = _cardGradients[index % _cardGradients.length];
 
                     return Dismissible(
                       key: Key(trip.id),
@@ -153,69 +282,32 @@ class HomeScreen extends StatelessWidget {
                       background: Container(
                         margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
-                          color: Colors.red.shade400,
-                          borderRadius: BorderRadius.circular(16),
+                          gradient: LinearGradient(
+                            colors: [Colors.red.shade400, Colors.red.shade600],
+                          ),
+                          borderRadius: BorderRadius.circular(20),
                         ),
                         alignment: Alignment.centerRight,
                         padding: const EdgeInsets.only(right: 24),
-                        child: const Icon(Icons.delete, color: Colors.white),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(Icons.delete_rounded, color: Colors.white, size: 26),
+                            SizedBox(height: 4),
+                            Text('Delete', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
                       ),
                       onDismissed: (_) => provider.deleteTrip(trip.id),
-                      child: Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.all(16),
-                          leading: CircleAvatar(
-                            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                            child: Text(
-                              trip.name[0].toUpperCase(),
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          title: Text(
-                            trip.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 4),
-                              Text('$memberCount people | ${trip.expenses.length} expenses'),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Total: ₹${total.toStringAsFixed(2)}',
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.edit_outlined, size: 20),
-                                tooltip: 'Edit Trip Details',
-                                onPressed: () => _showTripDialog(context, tripToEdit: trip),
-                              ),
-                              const Icon(Icons.chevron_right),
-                            ],
-                          ),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => TripDetailScreen(tripId: trip.id),
-                              ),
-                            );
-                          },
+                      child: _TripCard(
+                        trip: trip,
+                        total: total,
+                        memberCount: memberCount,
+                        accent: accent,
+                        onEdit: () => _showTripDialog(context, tripToEdit: trip),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => TripDetailScreen(tripId: trip.id)),
                         ),
                       ),
                     );
@@ -226,10 +318,87 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showTripDialog(context),
-        icon: const Icon(Icons.add),
-        label: const Text('New Trip'),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+          ),
+          borderRadius: BorderRadius.circular(50),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF4F46E5).withValues(alpha: 0.45),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: FloatingActionButton.extended(
+          onPressed: () => _showTripDialog(context),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          icon: const Icon(Icons.add_rounded, color: Colors.white),
+          label: const Text(
+            'New Trip',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _statItem(String label, String value, IconData icon) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.white.withValues(alpha: 0.85), size: 20),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.7),
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 32),
+      child: Column(
+        children: [
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFEEF2FF), Color(0xFFE0E7FF)],
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.flight_takeoff_rounded, size: 48, color: Color(0xFF4F46E5)),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'No trips yet',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF1F2937)),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Tap "New Trip" below to start tracking your group expenses',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+          ),
+        ],
       ),
     );
   }
@@ -242,13 +411,15 @@ class HomeScreen extends StatelessWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (context) {
-        return Padding(
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
           padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
             left: 24,
             right: 24,
             top: 24,
@@ -257,62 +428,234 @@ class HomeScreen extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Handle bar
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
               Text(
                 isEditing ? 'Edit Trip' : 'Create New Trip',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF1F2937)),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               TextField(
                 controller: nameController,
                 decoration: const InputDecoration(
                   labelText: 'Trip Name',
                   hintText: 'e.g., Goa Trip 2026',
-                  prefixIcon: Icon(Icons.edit),
+                  prefixIcon: Icon(Icons.flight_rounded, size: 20),
                 ),
                 textCapitalization: TextCapitalization.words,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               TextField(
                 controller: descController,
                 decoration: const InputDecoration(
                   labelText: 'Description (Optional)',
-                  hintText: 'e.g., Weekend getaway with college friends',
-                  prefixIcon: Icon(Icons.notes),
+                  hintText: 'e.g., Weekend getaway',
+                  prefixIcon: Icon(Icons.notes_rounded, size: 20),
                 ),
                 maxLines: 2,
               ),
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: () {
-                  final name = nameController.text.trim();
-                  if (name.isNotEmpty) {
-                    if (isEditing) {
-                      context.read<TripProvider>().editTrip(
-                            tripToEdit.id,
-                            name,
-                            newDescription: descController.text.trim(),
-                          );
-                    } else {
-                      context.read<TripProvider>().addTrip(
-                            name,
-                            description: descController.text.trim(),
-                          );
-                    }
-                    Navigator.pop(context);
-                  }
-                },
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+              const SizedBox(height: 20),
+              Container(
+                height: 52,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF4F46E5).withValues(alpha: 0.35),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-                child: Text(isEditing ? 'Save Changes' : 'Create Trip', style: const TextStyle(fontSize: 16)),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () {
+                      final name = nameController.text.trim();
+                      if (name.isNotEmpty) {
+                        if (isEditing) {
+                          context.read<TripProvider>().editTrip(
+                                tripToEdit.id,
+                                name,
+                                newDescription: descController.text.trim(),
+                              );
+                        } else {
+                          context.read<TripProvider>().addTrip(
+                                name,
+                                description: descController.text.trim(),
+                              );
+                        }
+                        Navigator.pop(context);
+                      }
+                    },
+                    child: Center(
+                      child: Text(
+                        isEditing ? 'Save Changes' : 'Create Trip',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              const SizedBox(height: 24),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _TripCard extends StatelessWidget {
+  final Trip trip;
+  final double total;
+  final int memberCount;
+  final Color accent;
+  final VoidCallback onEdit;
+  final VoidCallback onTap;
+
+  const _TripCard({
+    required this.trip,
+    required this.total,
+    required this.memberCount,
+    required this.accent,
+    required this.onEdit,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey.shade100),
+          boxShadow: [
+            BoxShadow(
+              color: accent.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              // Colored avatar
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [accent, accent.withValues(alpha: 0.7)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Center(
+                  child: Text(
+                    trip.name[0].toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 22,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              // Text info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      trip.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                        color: Color(0xFF1F2937),
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Row(
+                      children: [
+                        _chip(Icons.people_rounded, '$memberCount people', Colors.blue),
+                        const SizedBox(width: 6),
+                        _chip(Icons.receipt_rounded, '${trip.expenses.length} expenses', Colors.purple),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '₹${total.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        color: accent,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Actions
+              Column(
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.edit_rounded, size: 18, color: Colors.grey.shade400),
+                    onPressed: onEdit,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  ),
+                  Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey.shade400),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color.withValues(alpha: 0.8)),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: TextStyle(fontSize: 10, color: color.withValues(alpha: 0.9), fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
     );
   }
 }
