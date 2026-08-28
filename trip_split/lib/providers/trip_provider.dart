@@ -22,6 +22,12 @@ class TripProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Seamlessly updates trips from background live-sync without overwriting save callbacks
+  void updateFromRemote(List<Trip> remoteTrips) {
+    _trips = List.from(remoteTrips);
+    notifyListeners();
+  }
+
   /// Clears all loaded trips (used on logout)
   void clearTrips() {
     _trips = [];
@@ -109,21 +115,40 @@ class TripProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addPerson(String tripId, String groupId, String name, DietType dietType) {
+  bool addPerson(String tripId, String groupId, String name, DietType dietType, {String? userId, String? phone}) {
     final trip = getTrip(tripId);
-    if (trip == null) return;
+    if (trip == null) return false;
+
+    // Unique Member & Phone Validation across all groups in the trip
+    final cleanName = name.trim().toLowerCase();
+    final cleanPhone = phone?.replaceAll(RegExp(r'[^0-9]'), '').toLowerCase() ?? '';
+
+    for (var member in trip.allMembers) {
+      if (member.name.trim().toLowerCase() == cleanName) {
+        return false; // Duplicate name
+      }
+      if (cleanPhone.isNotEmpty && member.phone != null) {
+        final memberPhone = member.phone!.replaceAll(RegExp(r'[^0-9]'), '').toLowerCase();
+        if (memberPhone.isNotEmpty && memberPhone == cleanPhone) {
+          return false; // Duplicate phone
+        }
+      }
+    }
 
     final group = trip.groups.firstWhere((g) => g.id == groupId);
     group.members.add(Person(
       id: _uuid.v4(),
-      name: name,
+      userId: userId,
+      phone: phone,
+      name: name.trim(),
       dietType: dietType,
     ));
     _persist();
     notifyListeners();
+    return true;
   }
 
-  void editPerson(String tripId, String groupId, String personId, String newName, DietType newDietType) {
+  void editPerson(String tripId, String groupId, String personId, String newName, DietType newDietType, {String? userId, String? phone}) {
     final trip = getTrip(tripId);
     if (trip == null) return;
 
@@ -133,8 +158,13 @@ class TripProvider extends ChangeNotifier {
       if (memberIndex != -1) {
         group.members[memberIndex] = Person(
           id: personId,
+          userId: userId ?? group.members[memberIndex].userId,
+          phone: phone ?? group.members[memberIndex].phone,
           name: newName,
           dietType: newDietType,
+          paidAmount: group.members[memberIndex].paidAmount,
+          owedAmount: group.members[memberIndex].owedAmount,
+          balance: group.members[memberIndex].balance,
         );
         _persist();
         notifyListeners();
@@ -146,19 +176,27 @@ class TripProvider extends ChangeNotifier {
     final trip = getTrip(tripId);
     if (trip == null) return;
 
-    final group = trip.groups.firstWhere((g) => g.id == groupId);
-    group.members.removeWhere((m) => m.id == personId);
+    try {
+      final group = trip.groups.firstWhere((g) => g.id == groupId);
+      group.members.removeWhere((m) => m.id == personId);
 
-    // Also remove from expenses
-    for (var expense in trip.expenses) {
-      expense.splitAmongIds.remove(personId);
-      if (expense.paidById == personId) {
-        expense.paidById = '';
+      // Automatically remove expenses paid by deleted member
+      trip.expenses.removeWhere((exp) => exp.paidById == personId);
+
+      // For remaining expenses, remove member from split lists
+      for (var expense in trip.expenses) {
+        expense.splitAmongIds.remove(personId);
       }
-    }
 
-    _persist();
-    notifyListeners();
+      // Remove any expenses that have no split members left
+      trip.expenses.removeWhere((exp) => exp.splitAmongIds.isEmpty);
+
+      // Recalculate member balances
+      CalculationService.calculateBalances(trip);
+
+      _persist();
+      notifyListeners();
+    } catch (_) {}
   }
 
   void addExpense(String tripId, Expense expense) {

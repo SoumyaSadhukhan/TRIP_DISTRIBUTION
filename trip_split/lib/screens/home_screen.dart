@@ -1,13 +1,25 @@
 // lib/screens/home_screen.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/trip.dart';
 import '../providers/auth_provider.dart';
 import '../providers/trip_provider.dart';
+import 'friends_screen.dart';
+import 'notifications_screen.dart';
+import 'profile_screen.dart';
 import 'trip_detail_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  Timer? _syncTimer;
+  int _unreadNotifs = 0;
 
   static const List<Color> _cardGradients = [
     Color(0xFF4F46E5),
@@ -17,6 +29,52 @@ class HomeScreen extends StatelessWidget {
     Color(0xFFD97706),
     Color(0xFFDC2626),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Initial sync
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncData());
+    // Polling every 5 seconds for real-time multi-device sync
+    _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) => _syncData());
+  }
+
+  @override
+  void dispose() {
+    _syncTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _syncData() async {
+    if (!mounted) return;
+    final auth = context.read<AuthProvider>();
+    final user = auth.currentUser;
+    if (user == null) return;
+
+    try {
+      // 1. Fetch latest trips across shared collaborative accounts
+      final remoteTrips = await auth.apiService.getTrips(
+        userId: user.id,
+        phone: user.phone,
+        token: user.token,
+      );
+      if (mounted && remoteTrips.isNotEmpty) {
+        context.read<TripProvider>().updateFromRemote(remoteTrips);
+      }
+
+      // 2. Fetch live notification count
+      final notifs = await auth.apiService.getNotifications(
+        user.id,
+        token: user.token,
+      );
+      if (mounted) {
+        final unread = notifs.where((n) => !n.isRead).length;
+        if (unread != _unreadNotifs) {
+          setState(() => _unreadNotifs = unread);
+        }
+      }
+    } catch (_) {}
+  }
 
   void _confirmLogout(BuildContext context) {
     showDialog(
@@ -93,29 +151,106 @@ class HomeScreen extends StatelessWidget {
     final username = auth.currentUser?.username ?? 'User';
 
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          // ── Premium SliverAppBar ─────────────────────────────────
-          SliverAppBar(
-            expandedHeight: 200,
-            floating: false,
-            pinned: true,
-            stretch: true,
-            actions: [
-              IconButton(
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(10),
+      body: RefreshIndicator(
+        onRefresh: _syncData,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            // ── Premium SliverAppBar ─────────────────────────────────
+            SliverAppBar(
+              backgroundColor: const Color(0xFF1E1B4B),
+              surfaceTintColor: Colors.transparent,
+              expandedHeight: 200,
+              floating: false,
+              pinned: true,
+              stretch: true,
+              actions: [
+                IconButton(
+                  icon: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 20),
+                      ),
+                      if (_unreadNotifs > 0)
+                        Positioned(
+                          right: -2,
+                          top: -2,
+                          child: Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFEF4444),
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                            child: Center(
+                              child: Text(
+                                '$_unreadNotifs',
+                                style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
-                  child: const Icon(Icons.logout_rounded, color: Colors.white, size: 20),
+                  tooltip: 'Notifications',
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                    );
+                    _syncData();
+                  },
                 ),
-                tooltip: 'Log Out',
-                onPressed: () => _confirmLogout(context),
-              ),
-              const SizedBox(width: 8),
-            ],
+                IconButton(
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.people_alt_rounded, color: Colors.white, size: 20),
+                  ),
+                  tooltip: 'Trip Friends',
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const FriendsScreen()),
+                  ),
+                ),
+                IconButton(
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.account_circle_outlined, color: Colors.white, size: 20),
+                  ),
+                  tooltip: 'My Profile & Diet',
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                  ),
+                ),
+                IconButton(
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.logout_rounded, color: Colors.white, size: 20),
+                  ),
+                  tooltip: 'Log Out',
+                  onPressed: () => _confirmLogout(context),
+                ),
+                const SizedBox(width: 8),
+              ],
             flexibleSpace: FlexibleSpaceBar(
               titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
               title: Column(
@@ -276,9 +411,21 @@ class HomeScreen extends StatelessWidget {
                     final memberCount = trip.allMembers.length;
                     final accent = _cardGradients[index % _cardGradients.length];
 
+                    final authUser = context.watch<AuthProvider>().currentUser;
+                    final isOwner = authUser != null && (trip.userId == authUser.id || trip.isOwner);
+
                     return Dismissible(
                       key: Key(trip.id),
-                      direction: DismissDirection.endToStart,
+                      direction: isOwner ? DismissDirection.endToStart : DismissDirection.none,
+                      confirmDismiss: (_) async {
+                        if (!isOwner) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Only the trip creator can delete this trip.')),
+                          );
+                          return false;
+                        }
+                        return true;
+                      },
                       background: Container(
                         margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
@@ -298,7 +445,12 @@ class HomeScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                      onDismissed: (_) => provider.deleteTrip(trip.id),
+                      onDismissed: (_) {
+                        provider.deleteTrip(trip.id);
+                        if (authUser != null) {
+                          context.read<AuthProvider>().apiService.deleteTrip(trip.id, token: authUser.token, userId: authUser.id);
+                        }
+                      },
                       child: _TripCard(
                         trip: trip,
                         total: total,
@@ -317,6 +469,7 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
       floatingActionButton: Container(
         decoration: BoxDecoration(

@@ -6,6 +6,8 @@ import 'expense.dart';
 
 class Trip {
   final String id;
+  String? userId;
+  bool isOwner;
   String name;
   String? description;
   DateTime createdAt;
@@ -14,6 +16,8 @@ class Trip {
 
   Trip({
     required this.id,
+    this.userId,
+    this.isOwner = true,
     required this.name,
     this.description,
     required this.createdAt,
@@ -36,6 +40,8 @@ class Trip {
 
   Map<String, dynamic> toJson() => {
         'id': id,
+        'userId': userId,
+        'isOwner': isOwner,
         'name': name,
         'description': description,
         'createdAt': createdAt.toIso8601String(),
@@ -45,9 +51,11 @@ class Trip {
 
   factory Trip.fromJson(Map<String, dynamic> json) => Trip(
         id: json['id'],
+        userId: json['userId'],
+        isOwner: json['isOwner'] == true,
         name: json['name'],
         description: json['description'],
-        createdAt: DateTime.parse(json['createdAt']),
+        createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : DateTime.now(),
         groups: (json['groups'] as List).map((e) => Group.fromJson(e)).toList(),
         expenses: (json['expenses'] as List).map((e) => Expense.fromJson(e)).toList(),
       );

@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../models/enums.dart';
 import '../models/expense.dart';
+import '../models/person.dart';
 import '../models/trip.dart';
+import '../providers/auth_provider.dart';
 import '../providers/trip_provider.dart';
 import '../services/calculation_service.dart';
 
@@ -65,8 +67,24 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         final allMembers = trip.allMembers;
         final eligibleParticipants = CalculationService.getEligibleParticipants(_selectedCategory, allMembers);
 
-        // Auto-select eligible participants for new expense on initial build
+        final authUser = context.watch<AuthProvider>().currentUser;
+
+        // Auto-select payer (You) and eligible participants for new expense on initial build
         if (!_initialized) {
+          if (authUser != null) {
+            final currentUserMember = allMembers.firstWhere(
+              (m) => m.userId == authUser.id || (m.phone != null && m.phone!.isNotEmpty && m.phone == authUser.phone) || m.name.trim().toLowerCase() == authUser.fullName.trim().toLowerCase(),
+              orElse: () => allMembers.isNotEmpty ? allMembers.first : Person(id: '', name: '', dietType: DietType.vegetarian),
+            );
+            if (currentUserMember.id.isNotEmpty) {
+              _selectedPayerId = currentUserMember.id;
+            } else if (allMembers.isNotEmpty) {
+              _selectedPayerId = allMembers.first.id;
+            }
+          } else if (allMembers.isNotEmpty) {
+            _selectedPayerId = allMembers.first.id;
+          }
+
           _selectedParticipants = List.from(eligibleParticipants);
           _initialized = true;
         }
@@ -98,15 +116,15 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   textCapitalization: TextCapitalization.sentences,
                   onChanged: (_) => setState(() {}),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 TextField(
                   controller: _amountController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(
                     labelText: 'Amount (₹)',
                     hintText: '0.00',
                     prefixIcon: Icon(Icons.currency_rupee),
                   ),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 24),
@@ -168,17 +186,24 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
-                ...allMembers.map((member) => RadioListTile<String>(
-                      title: Text(member.name),
-                      secondary: CircleAvatar(
-                        backgroundColor: member.dietType.color.withValues(alpha: 0.2),
-                        child: Text(member.name[0].toUpperCase()),
-                      ),
-                      value: member.id,
-                      groupValue: _selectedPayerId,
-                      activeColor: Theme.of(context).colorScheme.primary,
-                      onChanged: (value) => setState(() => _selectedPayerId = value),
-                    )),
+                ...allMembers.map((member) {
+                  final isYou = authUser != null && (
+                    member.userId == authUser.id ||
+                    (member.phone != null && member.phone!.isNotEmpty && member.phone == authUser.phone) ||
+                    member.name.trim().toLowerCase() == authUser.fullName.trim().toLowerCase()
+                  );
+                  return RadioListTile<String>(
+                    title: Text(isYou ? '${member.name} (You)' : member.name, style: TextStyle(fontWeight: isYou ? FontWeight.bold : FontWeight.normal)),
+                    secondary: CircleAvatar(
+                      backgroundColor: member.dietType.color.withValues(alpha: 0.2),
+                      child: Text(member.name[0].toUpperCase()),
+                    ),
+                    value: member.id,
+                    groupValue: _selectedPayerId,
+                    activeColor: Theme.of(context).colorScheme.primary,
+                    onChanged: (value) => setState(() => _selectedPayerId = value),
+                  );
+                }),
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -202,8 +227,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 ...eligibleParticipants.map((id) {
                   final member = allMembers.firstWhere((m) => m.id == id);
                   final isSelected = _selectedParticipants.contains(id);
+                  final isYou = authUser != null && (
+                    member.userId == authUser.id ||
+                    (member.phone != null && member.phone!.isNotEmpty && member.phone == authUser.phone) ||
+                    member.name.trim().toLowerCase() == authUser.fullName.trim().toLowerCase()
+                  );
                   return CheckboxListTile(
-                    title: Text(member.name),
+                    title: Text(isYou ? '${member.name} (You)' : member.name, style: TextStyle(fontWeight: isYou ? FontWeight.bold : FontWeight.normal)),
                     secondary: CircleAvatar(
                       backgroundColor: member.dietType.color.withValues(alpha: 0.2),
                       child: Text(member.name[0].toUpperCase()),

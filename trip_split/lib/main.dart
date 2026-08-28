@@ -133,15 +133,243 @@ class TripExpenseApp extends StatelessWidget {
   }
 }
 
-class AuthWrapper extends StatelessWidget {
+class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  String? _lastLoadedUserId;
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+
+    if (auth.isCheckingToken) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF1E1B4B),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.flight_takeoff_rounded,
+                  color: Colors.white,
+                  size: 48,
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'EquiTrip',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Connecting to database session...',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.7),
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 28),
+              const SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (auth.isAuthenticated) {
+      if (auth.isBiometricLocked) {
+        return const _BiometricLockScreen();
+      }
+
+      final user = auth.currentUser!;
+      if (_lastLoadedUserId != user.id) {
+        _lastLoadedUserId = user.id;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          context.read<TripProvider>().loadUserTrips(
+            user.trips,
+            onSave: (trips) => auth.saveCurrentUserData(trips),
+          );
+        });
+      }
       return const HomeScreen();
     }
+
+    _lastLoadedUserId = null;
     return const LoginScreen();
+  }
+}
+
+/// Dedicated Screen displayed when biometric lock is active
+class _BiometricLockScreen extends StatefulWidget {
+  const _BiometricLockScreen();
+
+  @override
+  State<_BiometricLockScreen> createState() => _BiometricLockScreenState();
+}
+
+class _BiometricLockScreenState extends State<_BiometricLockScreen> {
+  bool _promptedOnce = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_promptedOnce && mounted) {
+        _promptedOnce = true;
+        context.read<AuthProvider>().unlockWithBiometrics();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final user = auth.currentUser;
+    final name = user?.fullName ?? 'User';
+
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF0F172A), Color(0xFF1E1B4B), Color(0xFF312E81)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Spacer(),
+                Container(
+                  width: 84,
+                  height: 84,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4F46E5).withValues(alpha: 0.25),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFF818CF8), width: 2),
+                  ),
+                  child: Center(
+                    child: Text(
+                      name.isNotEmpty ? name[0].toUpperCase() : 'U',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 34,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'EquiTrip is Locked',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Welcome back, $name',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.75),
+                    fontSize: 14,
+                  ),
+                ),
+                const Spacer(),
+                InkWell(
+                  onTap: () => auth.unlockWithBiometrics(),
+                  borderRadius: BorderRadius.circular(50),
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4F46E5),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF4F46E5).withValues(alpha: 0.4),
+                          blurRadius: 24,
+                          spreadRadius: 4,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.fingerprint_rounded,
+                      color: Colors.white,
+                      size: 56,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'Touch fingerprint sensor or enter PIN',
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const Spacer(),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () async {
+                      final ok = await auth.unlockWithBiometrics();
+                      if (!ok && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Biometric authentication cancelled or not recognized. Try again or switch account.'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.lock_open_rounded, size: 20),
+                    label: const Text('Unlock App'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF4F46E5),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () => auth.logout(),
+                  child: const Text(
+                    'Sign in with another account',
+                    style: TextStyle(color: Colors.white60, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

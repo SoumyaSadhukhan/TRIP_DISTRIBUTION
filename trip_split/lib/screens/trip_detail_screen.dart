@@ -1,4 +1,5 @@
 // lib/screens/trip_detail_screen.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:trip_split/screens/add_expense_screen.dart';
@@ -24,6 +25,7 @@ class TripDetailScreen extends StatefulWidget {
 class _TripDetailScreenState extends State<TripDetailScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  Timer? _pollTimer;
 
   static const Color _indigo = Color(0xFF4F46E5);
   static const Color _violet = Color(0xFF7C3AED);
@@ -33,12 +35,32 @@ class _TripDetailScreenState extends State<TripDetailScreen>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() => setState(() {}));
+    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) => _syncTripData());
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _syncTripData() async {
+    if (!mounted) return;
+    final auth = context.read<AuthProvider>();
+    final user = auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final remoteTrips = await auth.apiService.getTrips(
+        userId: user.id,
+        phone: user.phone,
+        token: user.token,
+      );
+      if (mounted && remoteTrips.isNotEmpty) {
+        context.read<TripProvider>().updateFromRemote(remoteTrips);
+      }
+    } catch (_) {}
   }
 
   @override
@@ -53,11 +75,15 @@ class _TripDetailScreenState extends State<TripDetailScreen>
 
         return Scaffold(
           backgroundColor: const Color(0xFFF8F9FF),
-          body: NestedScrollView(
+          body: RefreshIndicator(
+            onRefresh: _syncTripData,
+            child: NestedScrollView(
             headerSliverBuilder: (context, innerBoxIsScrolled) {
               return [
                 SliverAppBar(
-                  expandedHeight: 160,
+                  backgroundColor: const Color(0xFF312E81),
+                  surfaceTintColor: Colors.transparent,
+                  expandedHeight: 180,
                   floating: false,
                   pinned: true,
                   stretch: true,
@@ -189,6 +215,7 @@ class _TripDetailScreenState extends State<TripDetailScreen>
                 _BalancesTab(trip: trip),
               ],
             ),
+          ),
           ),
           floatingActionButton: _tabController.index != 2
               ? Container(
@@ -494,6 +521,10 @@ class _GroupCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _groupColors[group.name.hashCode.abs() % _groupColors.length];
+    final auth = context.watch<AuthProvider>();
+    final user = auth.currentUser;
+    final trip = context.watch<TripProvider>().getTrip(tripId);
+    final isOwner = user != null && trip != null && (trip.userId == user.id || trip.isOwner);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -543,7 +574,8 @@ class _GroupCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               _actionIconBtn(context, Icons.edit_rounded, 'Edit', Colors.indigo, () => _showEditGroupDialog(context)),
-              _actionIconBtn(context, Icons.delete_outline_rounded, 'Delete', Colors.red, () => _confirmDeleteGroup(context)),
+              if (isOwner)
+                _actionIconBtn(context, Icons.delete_outline_rounded, 'Delete', Colors.red, () => _confirmDeleteGroup(context)),
               const Icon(Icons.expand_more_rounded, color: Color(0xFFD1D5DB)),
             ],
           ),
@@ -729,6 +761,8 @@ class _GroupCard extends StatelessWidget {
     final isEditing = personToEdit != null;
     final nameController = TextEditingController(text: isEditing ? personToEdit.name : '');
     DietType selectedDiet = isEditing ? personToEdit.dietType : DietType.nonVegetarian;
+    String? linkedUserId = isEditing ? personToEdit.userId : null;
+    String? linkedPhone = isEditing ? personToEdit.phone : null;
 
     showModalBottomSheet(
       context: context,
@@ -748,7 +782,8 @@ class _GroupCard extends StatelessWidget {
                 right: 24,
                 top: 24,
               ),
-              child: Column(
+              child: SingleChildScrollView(
+                child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -767,7 +802,46 @@ class _GroupCard extends StatelessWidget {
                     isEditing ? 'Edit ${personToEdit.name}' : 'Add Person to ${group.name}',
                     style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF1F2937)),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
+
+                  // ── "Add Yourself (You)" & "Pick from Trip Friends" quick-fill ──
+                  if (!isEditing) ...[
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: const BorderSide(color: Color(0xFF4F46E5), width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.person_add_rounded, color: Color(0xFF4F46E5)),
+                      label: const Text('Add Yourself (You)', style: TextStyle(color: Color(0xFF4F46E5), fontWeight: FontWeight.bold)),
+                      onPressed: () {
+                        final auth = context.read<AuthProvider>();
+                        final u = auth.currentUser;
+                        if (u != null) {
+                          setState(() {
+                            nameController.text = u.fullName;
+                            linkedPhone = u.phone;
+                            linkedUserId = u.id;
+                            selectedDiet = DietType.values[u.dietType.clamp(0, DietType.values.length - 1)];
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    _PickFromFriendsWidget(
+                      onFriendSelected: (name, phone, userId, dietType) {
+                        setState(() {
+                          nameController.text = name;
+                          linkedPhone = phone;
+                          linkedUserId = userId;
+                          selectedDiet = DietType.values[dietType.clamp(0, DietType.values.length - 1)];
+                        });
+                      },
+                    ),
+                  ],
+
+                  if (!isEditing) const SizedBox(height: 12),
+
                   TextField(
                     controller: nameController,
                     decoration: const InputDecoration(
@@ -775,7 +849,7 @@ class _GroupCard extends StatelessWidget {
                       prefixIcon: Icon(Icons.person_rounded, size: 20),
                     ),
                     textCapitalization: TextCapitalization.words,
-                    autofocus: true,
+                    autofocus: isEditing,
                   ),
                   const SizedBox(height: 20),
                   Text(
@@ -836,11 +910,27 @@ class _GroupCard extends StatelessWidget {
                           final name = nameController.text.trim();
                           if (name.isNotEmpty) {
                             if (isEditing) {
-                              context.read<TripProvider>().editPerson(tripId, group.id, personToEdit.id, name, selectedDiet);
+                              context.read<TripProvider>().editPerson(
+                                tripId, group.id, personToEdit.id, name, selectedDiet,
+                                userId: linkedUserId, phone: linkedPhone,
+                              );
+                              Navigator.pop(context);
                             } else {
-                              context.read<TripProvider>().addPerson(tripId, group.id, name, selectedDiet);
+                              final success = context.read<TripProvider>().addPerson(
+                                tripId, group.id, name, selectedDiet,
+                                userId: linkedUserId, phone: linkedPhone,
+                              );
+                              if (success) {
+                                Navigator.pop(context);
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Member "$name" or phone number already exists in this trip.'),
+                                    backgroundColor: const Color(0xFFDC2626),
+                                  ),
+                                );
+                              }
                             }
-                            Navigator.pop(context);
                           }
                         },
                         child: Center(
@@ -854,10 +944,129 @@ class _GroupCard extends StatelessWidget {
                   ),
                 ],
               ),
+              ),
             );
           },
         );
       },
+    );
+  }
+}
+
+/// Inline widget that fetches connected Trip Friends and shows them as quick-fill chips.
+class _PickFromFriendsWidget extends StatefulWidget {
+  final void Function(String name, String phone, String? userId, int dietType) onFriendSelected;
+
+  const _PickFromFriendsWidget({required this.onFriendSelected});
+
+  @override
+  State<_PickFromFriendsWidget> createState() => _PickFromFriendsWidgetState();
+}
+
+class _PickFromFriendsWidgetState extends State<_PickFromFriendsWidget> {
+  List<Map<String, dynamic>> _friends = [];
+  bool _expanded = false;
+  bool _loading = false;
+
+  Future<void> _loadFriends() async {
+    if (_friends.isNotEmpty) return;
+    final auth = context.read<AuthProvider>();
+    final user = auth.currentUser;
+    if (user == null) return;
+
+    setState(() => _loading = true);
+    final friends = await auth.apiService.getFriends(user.id, token: user.token);
+    if (mounted) {
+      setState(() {
+        _friends = friends.map((f) => f.toJson()).toList();
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () {
+            setState(() => _expanded = !_expanded);
+            if (_expanded) _loadFriends();
+          },
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEEF2FF),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFF4F46E5).withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.people_alt_rounded, color: Color(0xFF4F46E5), size: 18),
+                const SizedBox(width: 8),
+                const Text(
+                  'Pick from Trip Friends',
+                  style: TextStyle(color: Color(0xFF4F46E5), fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+                const Spacer(),
+                Icon(
+                  _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                  color: const Color(0xFF4F46E5),
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_expanded) ...[
+          const SizedBox(height: 8),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(8),
+              child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+            )
+          else if (_friends.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Text(
+                'No connected friends yet. Add friends from the Trip Friends screen.',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: _friends.map((f) {
+                final dietNames = ['🌿 Veg', '🍖 Non-Veg', '🍷 +Alcohol'];
+                final dietIdx = (f['dietType'] as int?) ?? 0;
+                return ActionChip(
+                  avatar: CircleAvatar(
+                    backgroundColor: const Color(0xFF4F46E5).withValues(alpha: 0.15),
+                    child: Text(
+                      (f['name'] as String? ?? 'F')[0].toUpperCase(),
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF4F46E5)),
+                    ),
+                  ),
+                  label: Text(
+                    '${f['name']} (${dietNames[dietIdx.clamp(0, 2)]})',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  onPressed: () {
+                    widget.onFriendSelected(
+                      f['name'] ?? 'Friend',
+                      f['phone'] ?? '',
+                      f['friendUserId'] ?? f['userId'],
+                      dietIdx,
+                    );
+                  },
+                );
+              }).toList(),
+            ),
+        ],
+      ],
     );
   }
 }
@@ -890,6 +1099,16 @@ class _MemberTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final user = auth.currentUser;
+    final trip = context.watch<TripProvider>().getTrip(tripId);
+    final isOwner = user != null && trip != null && (trip.userId == user.id || trip.isOwner);
+    final isCurrentUser = user != null && (
+      member.userId == user.id ||
+      (member.phone != null && member.phone!.isNotEmpty && member.phone == user.phone) ||
+      member.name.trim().toLowerCase() == user.fullName.trim().toLowerCase()
+    );
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -908,7 +1127,14 @@ class _MemberTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(member.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                Text(
+                  isCurrentUser ? '${member.name} (You)' : member.name,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: isCurrentUser ? const Color(0xFF4F46E5) : const Color(0xFF1F2937),
+                  ),
+                ),
                 Text(
                   member.dietType.label,
                   style: TextStyle(color: member.dietType.color, fontSize: 11, fontWeight: FontWeight.w500),
@@ -922,12 +1148,13 @@ class _MemberTile extends StatelessWidget {
             padding: const EdgeInsets.all(4),
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
           ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFFDC2626)),
-            onPressed: () => context.read<TripProvider>().deletePerson(tripId, groupId, member.id),
-            padding: const EdgeInsets.all(4),
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-          ),
+          if (isOwner)
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, size: 16, color: Color(0xFFDC2626)),
+              onPressed: () => context.read<TripProvider>().deletePerson(tripId, groupId, member.id),
+              padding: const EdgeInsets.all(4),
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            ),
         ],
       ),
     );

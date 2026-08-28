@@ -12,6 +12,12 @@ class StorageService {
   StorageService({this.baseDirPath = 'data/users', SharedPreferences? prefs})
       : _prefs = prefs;
 
+  static const String _tokenKey = 'saved_auth_token';
+  static const String _phoneKey = 'saved_user_phone';
+  static const String _userIdKey = 'saved_user_id';
+  static const String _biometricPrefKey = 'saved_biometric_enabled';
+  static const String _lastActiveUserKey = 'last_active_user_data';
+
   /// Ensures that the storage and SharedPreferences instance are initialized
   Future<void> init() async {
     _prefs ??= await SharedPreferences.getInstance();
@@ -22,215 +28,106 @@ class StorageService {
         if (!await dir.exists()) {
           await dir.create(recursive: true);
         }
-      } catch (_) {
-        // Silently ignore directory creation errors on platforms/sandboxes without relative directory write access
-      }
-    }
-  }
-
-  /// Sanitizes username to create a safe key and file name
-  String _sanitizeUsername(String username) {
-    return username.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9_\-]'), '_');
-  }
-
-  String _getPrefKey(String cleanUsername) => 'user_data_$cleanUsername';
-  static const String _registryKey = 'users_registry';
-
-  /// Checks if a user already exists by username
-  Future<bool> userExists(String username) async {
-    await init();
-    final clean = _sanitizeUsername(username);
-
-    // 1. Check SharedPreferences direct key
-    final prefKey = _getPrefKey(clean);
-    if (_prefs?.containsKey(prefKey) == true) {
-      return true;
-    }
-
-    // 2. Check SharedPreferences user registry
-    final registry = _prefs?.getStringList(_registryKey) ?? [];
-    if (registry.any((u) => _sanitizeUsername(u) == clean)) {
-      return true;
-    }
-
-    // 3. Fallback: check file if available on non-web
-    if (!kIsWeb) {
-      try {
-        final file = File('$baseDirPath/$clean.json');
-        if (await file.exists()) {
-          return true;
-        }
       } catch (_) {}
     }
-
-    return false;
   }
 
-  /// Saves or updates a user and their full trip/expense data
-  Future<void> saveUser(UserModel user) async {
+  // --- Session Token Management ---
+
+  Future<void> saveAuthToken(String token, {String? phone, String? userId}) async {
     await init();
-    final clean = _sanitizeUsername(user.username);
-    const encoder = JsonEncoder.withIndent('  ');
-    final jsonString = encoder.convert(user.toJson());
+    await _prefs?.setString(_tokenKey, token);
+    if (phone != null) await _prefs?.setString(_phoneKey, phone);
+    if (userId != null) await _prefs?.setString(_userIdKey, userId);
+  }
 
-    // 1. Save to SharedPreferences (works on all platforms: Web, Android, iOS, Windows, Mac, Linux)
-    final prefKey = _getPrefKey(clean);
-    await _prefs?.setString(prefKey, jsonString);
+  Future<String?> getAuthToken() async {
+    await init();
+    return _prefs?.getString(_tokenKey);
+  }
 
-    // Update username registry list
-    final registry = _prefs?.getStringList(_registryKey) ?? [];
-    if (!registry.contains(user.username)) {
-      registry.add(user.username);
-      await _prefs?.setStringList(_registryKey, registry);
-    }
+  Future<String?> getSavedPhone() async {
+    await init();
+    return _prefs?.getString(_phoneKey);
+  }
 
-    // 2. Also try saving to local file as backup if on non-web
+  Future<String?> getSavedUserId() async {
+    await init();
+    return _prefs?.getString(_userIdKey);
+  }
+
+  Future<void> clearAuthToken() async {
+    await init();
+    await _prefs?.remove(_tokenKey);
+    await _prefs?.remove(_phoneKey);
+    await _prefs?.remove(_userIdKey);
+    await _prefs?.remove(_lastActiveUserKey);
+  }
+
+  Future<void> setBiometricEnabled(bool enabled) async {
+    await init();
+    await _prefs?.setBool(_biometricPrefKey, enabled);
+  }
+
+  Future<bool> isBiometricEnabled() async {
+    await init();
+    return _prefs?.getBool(_biometricPrefKey) ?? false;
+  }
+
+  // --- Cached User Profile & Trips ---
+
+  String _sanitizeKey(String text) {
+    return text.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9_\-]'), '_');
+  }
+
+  String _getPrefKey(String clean) => 'user_data_$clean';
+
+  Future<void> saveCachedUser(UserModel user) async {
+    await init();
+    final clean = _sanitizeKey(user.phone.isNotEmpty ? user.phone : user.username);
+    final jsonString = jsonEncode(user.toJson());
+
+    await _prefs?.setString(_getPrefKey(clean), jsonString);
+    await _prefs?.setString(_lastActiveUserKey, jsonString);
+
     if (!kIsWeb) {
       try {
-        final dir = Directory(baseDirPath);
-        if (!await dir.exists()) {
-          await dir.create(recursive: true);
-        }
         final file = File('$baseDirPath/$clean.json');
         await file.writeAsString(jsonString, flush: true);
-      } catch (_) {
-        // Silently ignore if file I/O isn't permitted in current sandbox
-      }
+      } catch (_) {}
     }
   }
 
-  /// Loads a user from storage
-  Future<UserModel?> loadUser(String username) async {
+  Future<UserModel?> loadCachedUser([String? identifier]) async {
     await init();
-    final clean = _sanitizeUsername(username);
 
-    // 1. Try loading from SharedPreferences
-    final prefKey = _getPrefKey(clean);
-    final jsonStr = _prefs?.getString(prefKey);
-    if (jsonStr != null && jsonStr.isNotEmpty) {
-      try {
-        final Map<String, dynamic> jsonMap = jsonDecode(jsonStr);
-        return UserModel.fromJson(jsonMap);
-      } catch (_) {}
-    }
-
-    // 2. Try loading from file on non-web if available
-    if (!kIsWeb) {
-      try {
-        final file = File('$baseDirPath/$clean.json');
-        if (await file.exists()) {
-          final content = await file.readAsString();
-          final Map<String, dynamic> jsonMap = jsonDecode(content);
-          final user = UserModel.fromJson(jsonMap);
-          // Sync to SharedPreferences for fast subsequent reads
-          await _prefs?.setString(prefKey, content);
-          return user;
-        }
-      } catch (_) {}
-    }
-
-    // 3. Fallback: Search all users in registry or directory
-    final allUsers = await getAllUsers();
-    try {
-      return allUsers.firstWhere(
-        (u) => _sanitizeUsername(u.username) == clean,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Retrieves all saved users
-  Future<List<UserModel>> getAllUsers() async {
-    await init();
-    final Map<String, UserModel> userMap = {};
-
-    // 1. Load from SharedPreferences registry
-    final registry = _prefs?.getStringList(_registryKey) ?? [];
-    for (final uname in registry) {
-      final clean = _sanitizeUsername(uname);
-      final prefKey = _getPrefKey(clean);
-      final jsonStr = _prefs?.getString(prefKey);
+    if (identifier != null && identifier.isNotEmpty) {
+      final clean = _sanitizeKey(identifier);
+      final jsonStr = _prefs?.getString(_getPrefKey(clean));
       if (jsonStr != null && jsonStr.isNotEmpty) {
         try {
-          final Map<String, dynamic> jsonMap = jsonDecode(jsonStr);
-          final user = UserModel.fromJson(jsonMap);
-          userMap[clean] = user;
+          return UserModel.fromJson(jsonDecode(jsonStr));
         } catch (_) {}
       }
     }
 
-    // 2. Also check any additional keys in SharedPreferences
-    final allKeys = _prefs?.getKeys() ?? {};
-    for (final key in allKeys) {
-      if (key.startsWith('user_data_')) {
-        final clean = key.substring('user_data_'.length);
-        if (!userMap.containsKey(clean)) {
-          final jsonStr = _prefs?.getString(key);
-          if (jsonStr != null) {
-            try {
-              final Map<String, dynamic> jsonMap = jsonDecode(jsonStr);
-              final user = UserModel.fromJson(jsonMap);
-              userMap[clean] = user;
-            } catch (_) {}
-          }
-        }
-      }
-    }
-
-    // 3. Also check files on non-web if available
-    if (!kIsWeb) {
+    final lastJson = _prefs?.getString(_lastActiveUserKey);
+    if (lastJson != null && lastJson.isNotEmpty) {
       try {
-        final dir = Directory(baseDirPath);
-        if (await dir.exists()) {
-          final files = dir.listSync().whereType<File>().where((f) => f.path.endsWith('.json'));
-          for (final file in files) {
-            try {
-              final content = await file.readAsString();
-              final Map<String, dynamic> jsonMap = jsonDecode(content);
-              final user = UserModel.fromJson(jsonMap);
-              final clean = _sanitizeUsername(user.username);
-              if (!userMap.containsKey(clean)) {
-                userMap[clean] = user;
-              }
-            } catch (_) {}
-          }
-        }
+        return UserModel.fromJson(jsonDecode(lastJson));
       } catch (_) {}
     }
 
-    return userMap.values.toList();
+    return null;
   }
 
-  /// Deletes a user
-  Future<bool> deleteUser(String username) async {
+  // Legacy compatibility helpers
+  Future<bool> userExists(String username) async {
     await init();
-    final clean = _sanitizeUsername(username);
-    bool deleted = false;
-
-    final prefKey = _getPrefKey(clean);
-    if (_prefs?.containsKey(prefKey) == true) {
-      await _prefs?.remove(prefKey);
-      deleted = true;
-    }
-
-    final registry = _prefs?.getStringList(_registryKey) ?? [];
-    if (registry.remove(username) || registry.remove(clean)) {
-      await _prefs?.setStringList(_registryKey, registry);
-      deleted = true;
-    }
-
-    if (!kIsWeb) {
-      try {
-        final file = File('$baseDirPath/$clean.json');
-        if (await file.exists()) {
-          await file.delete();
-          deleted = true;
-        }
-      } catch (_) {}
-    }
-
-    return deleted;
+    final clean = _sanitizeKey(username);
+    return _prefs?.containsKey(_getPrefKey(clean)) ?? false;
   }
-}
 
+  Future<void> saveUser(UserModel user) => saveCachedUser(user);
+  Future<UserModel?> loadUser(String username) => loadCachedUser(username);
+}

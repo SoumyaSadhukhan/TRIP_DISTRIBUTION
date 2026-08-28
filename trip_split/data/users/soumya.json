@@ -1,0 +1,122 @@
+{
+  "id": "ae20f129-c333-48c1-a240-c13e85145dad",
+  "username": "soumya",
+  "password": "qwe1234",
+  "createdAt": "2026-08-19T16:43:00.029978",
+  "lastLoginAt": "2026-08-21T13:22:52.905634",
+  "trips": [
+    {
+      "id": "8bb2472c-de8c-416d-907d-e37486ffcc86",
+      "name": "drj",
+      "description": "",
+      "createdAt": "2026-08-19T16:43:06.112901",
+      "groups": [
+        {
+          "id": "77fea894-30ea-4784-9899-b602d84ae78b",
+          "name": "grp 1",
+          "members": [
+            {
+              "id": "20e420bd-107f-4dc6-a1f4-8aade49eb591",
+              "name": "a",
+              "dietType": 1,
+              "paidAmount": 0.0,
+              "owedAmount": 0.0,
+              "balance": 0.0
+            },
+            {
+              "id": "155b8f83-6408-4b6c-99f9-00ff96f34ecc",
+              "name": "b",
+              "dietType": 1,
+              "paidAmount": 0.0,
+              "owedAmount": 0.0,
+              "balance": 0.0
+            },
+            {
+              "id": "613a020b-f506-49f6-9d25-ac4b545e02d2",
+              "name": "c",
+              "dietType": 2,
+              "paidAmount": 0.0,
+              "owedAmount": 0.0,
+              "balance": 0.0
+            },
+            {
+              "id": "aad3e072-7cf6-4753-8d74-24e24c127fba",
+              "name": "d",
+              "dietType": 2,
+              "paidAmount": 0.0,
+              "owedAmount": 0.0,
+              "balance": 0.0
+            },
+            {
+              "id": "857bb325-903d-4083-8c54-adf43290049a",
+              "name": "e",
+              "dietType": 1,
+              "paidAmount": 0.0,
+              "owedAmount": 0.0,
+              "balance": 0.0
+            }
+          ]
+        }
+      ],
+      "expenses": [
+        {
+          "id": "a143ec7f-7da6-483f-9635-667409de1c20",
+          "description": "lunch",
+          "amount": 2530.0,
+          "category": 3,
+          "paidById": "20e420bd-107f-4dc6-a1f4-8aade49eb591",
+          "date": "2026-08-19T16:43:48.910379",
+          "splitAmongIds": [
+            "20e420bd-107f-4dc6-a1f4-8aade49eb591",
+            "155b8f83-6408-4b6c-99f9-00ff96f34ecc",
+            "613a020b-f506-49f6-9d25-ac4b545e02d2",
+            "aad3e072-7cf6-4753-8d74-24e24c127fba",
+            "857bb325-903d-4083-8c54-adf43290049a"
+          ]
+        },
+        {
+          "id": "604093cc-a29c-4d8d-8be7-d593167e86a4",
+          "description": "dinner",
+          "amount": 3520.0,
+          "category": 3,
+          "paidById": "aad3e072-7cf6-4753-8d74-24e24c127fba",
+          "date": "2026-08-19T16:44:00.356731",
+          "splitAmongIds": [
+            "20e420bd-107f-4dc6-a1f4-8aade49eb591",
+            "155b8f83-6408-4b6c-99f9-00ff96f34ecc",
+            "613a020b-f506-49f6-9d25-ac4b545e02d2",
+            "aad3e072-7cf6-4753-8d74-24e24c127fba",
+            "857bb325-903d-4083-8c54-adf43290049a"
+          ]
+        },
+        {
+          "id": "e8453f3f-8a99-46c9-8bdd-f8a4ad4d7230",
+          "description": "room",
+          "amount": 8000.0,
+          "category": 3,
+          "paidById": "613a020b-f506-49f6-9d25-ac4b545e02d2",
+          "date": "2026-08-19T16:44:13.889844",
+          "splitAmongIds": [
+            "20e420bd-107f-4dc6-a1f4-8aade49eb591",
+            "155b8f83-6408-4b6c-99f9-00ff96f34ecc",
+            "613a020b-f506-49f6-9d25-ac4b545e02d2",
+            "aad3e072-7cf6-4753-8d74-24e24c127fba",
+            "857bb325-903d-4083-8c54-adf43290049a"
+          ]
+        },
+        {
+          "id": "d4196bca-d28a-4107-bff2-249dc46eabe0",
+          "description": "drinks",
+          "amount": 3200.0,
+          "category": 4,
+          "paidById": "613a020b-f506-49f6-9d25-ac4b545e02d2",
+          "date": "2026-08-19T16:44:26.331635",
+          "splitAmongIds": [
+            "613a020b-f506-49f6-9d25-ac4b545e02d2",
+            "aad3e072-7cf6-4753-8d74-24e24c127fba"
+          ]
+        }
+      ]
+    }
+  ]
+}
