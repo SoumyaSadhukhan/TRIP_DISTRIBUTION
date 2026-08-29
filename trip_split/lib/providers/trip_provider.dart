@@ -12,19 +12,33 @@ class TripProvider extends ChangeNotifier {
   List<Trip> _trips = [];
   final _uuid = const Uuid();
   Future<void> Function(List<Trip>)? _onSaveCallback;
+  bool _hasPendingSync = true; // True by default so initial startup syncs with DB
 
   List<Trip> get trips => List.unmodifiable(_trips);
+  bool get hasPendingSync => _hasPendingSync;
+
+  void markPendingSync() {
+    _hasPendingSync = true;
+    notifyListeners();
+  }
+
+  void clearPendingSync() {
+    _hasPendingSync = false;
+    notifyListeners();
+  }
 
   /// Initializes the provider with a user's trips and a save callback
   void loadUserTrips(List<Trip> trips, {Future<void> Function(List<Trip>)? onSave}) {
     _trips = List.from(trips);
     _onSaveCallback = onSave;
+    _hasPendingSync = true;
     notifyListeners();
   }
 
   /// Seamlessly updates trips from background live-sync without overwriting save callbacks
   void updateFromRemote(List<Trip> remoteTrips) {
     _trips = List.from(remoteTrips);
+    _hasPendingSync = false;
     notifyListeners();
   }
 
@@ -32,10 +46,12 @@ class TripProvider extends ChangeNotifier {
   void clearTrips() {
     _trips = [];
     _onSaveCallback = null;
+    _hasPendingSync = false;
     notifyListeners();
   }
 
   void _persist() {
+    _hasPendingSync = true;
     _onSaveCallback?.call(_trips);
   }
 

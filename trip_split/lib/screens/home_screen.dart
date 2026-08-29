@@ -36,10 +36,10 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Immediate 1st Task: sync with SQL Server DB on app start
-    WidgetsBinding.instance.addPostFrameCallback((_) => _syncData());
-    // Polling every 5 seconds for real-time multi-device sync
-    _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) => _syncData());
+    // 1. Initial sync on app start
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkConnectionAndSync(force: true));
+    // 2. Lightweight heartbeat check every 20s (zero DB load, only syncs on reconnection or local edits)
+    _syncTimer = Timer.periodic(const Duration(seconds: 20), (_) => _checkConnectionAndSync());
   }
 
   @override
@@ -48,60 +48,82 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  Future<void> _syncData() async {
+  Future<void> _checkConnectionAndSync({bool force = false}) async {
     if (!mounted) return;
     final auth = context.read<AuthProvider>();
     final user = auth.currentUser;
     if (user == null) return;
 
     try {
-      final connected = await auth.apiService.testConnection(auth.apiService.baseUrl);
-      if (mounted && _isApiConnected != connected) {
-        setState(() => _isApiConnected = connected);
+      final wasConnected = _isApiConnected;
+      final isNowConnected = await auth.apiService.testConnection(auth.apiService.baseUrl);
+
+      if (mounted && _isApiConnected != isNowConnected) {
+        setState(() => _isApiConnected = isNowConnected);
       }
 
-      if (connected) {
-        if (mounted) setState(() => _isSyncing = true);
+      // Reconnection event detected: transitioned from offline -> online!
+      final justReconnected = !wasConnected && isNowConnected;
+      final tripProvider = context.read<TripProvider>();
+      final hasPendingChanges = tripProvider.hasPendingSync;
 
-        // 1. PUSH local offline trips, members, and expenses to SQL Server DB
-        final tripProvider = context.read<TripProvider>();
-        final localTrips = tripProvider.trips;
-        if (localTrips.isNotEmpty) {
-          await auth.apiService.syncTrips(
-            userId: user.id,
-            trips: localTrips,
-            token: user.token,
-          );
-        }
-
-        // 2. FETCH updated remote trips from SQL Server DB
-        final remoteTrips = await auth.apiService.getTrips(
-          userId: user.id,
-          phone: user.phone,
-          token: user.token,
-        );
-        if (mounted && remoteTrips.isNotEmpty) {
-          context.read<TripProvider>().updateFromRemote(remoteTrips);
-        }
-
-        // 3. FETCH live notification count
-        final notifs = await auth.apiService.getNotifications(
-          user.id,
-          token: user.token,
-        );
-        if (mounted) {
-          final unread = notifs.where((n) => !n.isRead).length;
-          if (unread != _unreadNotifs) {
-            setState(() => _unreadNotifs = unread);
-          }
-        }
+      // Smart Sync Rules:
+      // - Only sync if forced (app start or pull-to-refresh),
+      // - Or if newly reconnected to API,
+      // - Or if online and has pending local changes to push.
+      // - Otherwise, DO NOT spam the server!
+      if (isNowConnected && (force || justReconnected || hasPendingChanges)) {
+        await _performDatabaseSync(auth, user, tripProvider);
       }
     } catch (_) {
       if (mounted && _isApiConnected) {
         setState(() => _isApiConnected = false);
       }
+    }
+  }
+
+  Future<void> _performDatabaseSync(AuthProvider auth, dynamic user, TripProvider tripProvider) async {
+    if (_isSyncing) return;
+    if (mounted) setState(() => _isSyncing = true);
+
+    try {
+      // 1. PUSH local offline trips to SQL Server DB if pending changes exist
+      final localTrips = tripProvider.trips;
+      if (localTrips.isNotEmpty && tripProvider.hasPendingSync) {
+        final ok = await auth.apiService.syncTrips(
+          userId: user.id,
+          trips: localTrips,
+          token: user.token,
+        );
+        if (ok) {
+          tripProvider.clearPendingSync();
+        }
+      }
+
+      // 2. FETCH updated remote trips from SQL Server DB
+      final remoteTrips = await auth.apiService.getTrips(
+        userId: user.id,
+        phone: user.phone,
+        token: user.token,
+      );
+      if (mounted && remoteTrips.isNotEmpty) {
+        tripProvider.updateFromRemote(remoteTrips);
+      }
+
+      // 3. FETCH live notification count
+      final notifs = await auth.apiService.getNotifications(
+        user.id,
+        token: user.token,
+      );
+      if (mounted) {
+        final unread = notifs.where((n) => !n.isRead).length;
+        if (unread != _unreadNotifs) {
+          setState(() => _unreadNotifs = unread);
+        }
+      }
+    } catch (_) {
     } finally {
-      if (mounted && _isSyncing) {
+      if (mounted) {
         setState(() => _isSyncing = false);
       }
     }
@@ -218,7 +240,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: _syncData,
+        onRefresh: () => _checkConnectionAndSync(force: true),
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
@@ -321,7 +343,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       context,
                       MaterialPageRoute(builder: (_) => const NotificationsScreen()),
                     );
-                    _syncData();
+                    _checkConnectionAndSync();
                   },
                 ),
                 IconButton(
