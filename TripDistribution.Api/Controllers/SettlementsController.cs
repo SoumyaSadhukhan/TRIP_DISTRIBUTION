@@ -20,14 +20,28 @@ namespace TripDistribution.Api.Controllers
         public async Task<IActionResult> GetSettlements(string tripId)
         {
             var settlements = await _settlementService.GetSettlementsByTripIdAsync(tripId);
-            return Ok(settlements);
+            return Ok(new { success = true, settlements });
         }
 
         [HttpPost]
         public async Task<IActionResult> CreateSettlement([FromBody] CreateSettlementRequestDto request)
         {
             var settlement = await _settlementService.CreateSettlementAsync(request);
-            return Ok(settlement);
+            return Ok(new { success = true, settlement });
         }
+
+        [HttpPost("accept")]
+        public async Task<IActionResult> AcceptSettlement([FromBody] AcceptSettlementDto request)
+        {
+            var result = await _settlementService.AcceptSettlementAsync(request.SettlementId, request.UserId);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+    }
+
+    public class AcceptSettlementDto
+    {
+        public string SettlementId { get; set; } = string.Empty;
+        public string UserId { get; set; } = string.Empty;
     }
 }

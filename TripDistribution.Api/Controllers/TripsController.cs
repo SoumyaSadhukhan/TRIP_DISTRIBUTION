@@ -10,10 +10,12 @@ namespace TripDistribution.Api.Controllers
     public class TripsController : ControllerBase
     {
         private readonly ITripService _tripService;
+        private readonly ISettlementService _settlementService;
 
-        public TripsController(ITripService tripService)
+        public TripsController(ITripService tripService, ISettlementService settlementService)
         {
             _tripService = tripService;
+            _settlementService = settlementService;
         }
 
         [HttpGet]
@@ -59,6 +61,21 @@ namespace TripDistribution.Api.Controllers
         public async Task<IActionResult> SyncTrips([FromBody] SyncTripsRequestDto request)
         {
             var result = await _tripService.SyncTripsAsync(request);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpPost("settle-request")]
+        public async Task<IActionResult> SettleRequest([FromBody] CreateSettlementRequestDto request)
+        {
+            var settlement = await _settlementService.CreateSettlementAsync(request);
+            return Ok(new { success = true, settlement });
+        }
+
+        [HttpPost("settle-accept")]
+        public async Task<IActionResult> SettleAccept([FromBody] AcceptSettlementDto request)
+        {
+            var result = await _settlementService.AcceptSettlementAsync(request.SettlementId, request.UserId);
             if (!result.Success) return BadRequest(result);
             return Ok(result);
         }

@@ -13,6 +13,7 @@ namespace TripDistribution.Services.Services
     {
         Task<IEnumerable<SettlementTransaction>> GetSettlementsByTripIdAsync(string tripId);
         Task<SettlementTransaction> CreateSettlementAsync(CreateSettlementRequestDto request);
+        Task<ApiResponse<bool>> AcceptSettlementAsync(string settlementId, string userId);
     }
 
     public class SettlementService : ISettlementService
@@ -32,7 +33,7 @@ namespace TripDistribution.Services.Services
             {
                 using var db = _connectionFactory.CreateConnection();
                 return await db.QueryAsync<SettlementTransaction>(
-                    "SELECT settlement_id as SettlementId, trip_id as TripId, from_person_id as FromPersonId, to_person_id as ToPersonId, amount as Amount, status as Status, created_by_user_id as CreatedByUserId, settled_at as SettledAt FROM SettlementTransactions WHERE trip_id = @TripId ORDER BY settled_at DESC",
+                    "SELECT settlement_id as SettlementId, trip_id as TripId, from_person_id as FromPersonId, to_person_id as ToPersonId, amount as Amount, status as Status, created_by_user_id as CreatedByUserId, created_at as SettledAt FROM Settlements WHERE trip_id = @TripId ORDER BY created_at DESC",
                     new { TripId = tripId });
             }
             catch (Exception ex)
@@ -51,8 +52,8 @@ namespace TripDistribution.Services.Services
                 var now = DateTime.UtcNow;
 
                 var sql = @"
-                    INSERT INTO SettlementTransactions (settlement_id, trip_id, from_person_id, to_person_id, amount, is_completed, status, created_by_user_id, settled_at)
-                    VALUES (@SettlementId, @TripId, @From, @To, @Amount, 1, 'ACCEPTED', @CreatedBy, @Now)";
+                    INSERT INTO Settlements (settlement_id, trip_id, from_person_id, to_person_id, amount, status, created_by_user_id, created_at)
+                    VALUES (@SettlementId, @TripId, @From, @To, @Amount, 'COMPLETED', @CreatedBy, @Now)";
 
                 await db.ExecuteAsync(sql, new {
                     SettlementId = settlementId,
@@ -74,7 +75,7 @@ namespace TripDistribution.Services.Services
                     ToPersonId = request.ToPersonId,
                     Amount = request.Amount,
                     IsCompleted = true,
-                    Status = "ACCEPTED",
+                    Status = "COMPLETED",
                     CreatedByUserId = request.CreatedByUserId,
                     SettledAt = now
                 };
@@ -83,6 +84,29 @@ namespace TripDistribution.Services.Services
             {
                 _logger.LogError($"Error in CreateSettlementAsync for tripId {request.TripId}", ex, "SETTLEMENTS");
                 throw;
+            }
+        }
+
+        public async Task<ApiResponse<bool>> AcceptSettlementAsync(string settlementId, string userId)
+        {
+            try
+            {
+                using var db = _connectionFactory.CreateConnection();
+                var rows = await db.ExecuteAsync(
+                    "UPDATE Settlements SET status = 'COMPLETED' WHERE settlement_id = @SettlementId",
+                    new { SettlementId = settlementId });
+
+                if (rows > 0)
+                {
+                    _logger.LogInfo($"Settlement accepted: ID={settlementId} by user {userId}", "SETTLEMENTS");
+                    return new ApiResponse<bool> { Success = true, Message = "Settlement accepted and completed." };
+                }
+                return new ApiResponse<bool> { Success = false, Message = "Settlement record not found." };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error in AcceptSettlementAsync for settlementId {settlementId}", ex, "SETTLEMENTS");
+                return new ApiResponse<bool> { Success = false, Message = ex.Message };
             }
         }
     }
