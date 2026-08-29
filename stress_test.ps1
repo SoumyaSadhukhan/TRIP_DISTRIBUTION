@@ -1,10 +1,10 @@
 param(
     [string]$BaseUrl = "http://localhost:5246/api",
-    [int]$TotalIterations = 200,
-    [int]$Concurrency = 20
+    [int]$TotalIterations = 20000,
+    [int]$Concurrency = 200
 )
 
-# Compile high-performance native C# load tester directly into memory
+# Compile high-performance native C# load tester with connection pooling (reusing TCP sockets)
 $csharpCode = @"
 using System;
 using System.Collections.Generic;
@@ -15,7 +15,19 @@ using System.Threading.Tasks;
 
 public class LoadTester
 {
-    private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+    private static readonly HttpClient _httpClient;
+
+    static LoadTester()
+    {
+        var handler = new HttpClientHandler
+        {
+            MaxConnectionsPerServer = 2000
+        };
+        _httpClient = new HttpClient(handler)
+        {
+            Timeout = TimeSpan.FromSeconds(15)
+        };
+    }
 
     public static async Task<LoadResult> RunAsync(string baseUrl, int totalRequests, int concurrency)
     {
