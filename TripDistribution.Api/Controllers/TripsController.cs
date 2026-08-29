@@ -16,11 +16,19 @@ namespace TripDistribution.Api.Controllers
             _tripService = tripService;
         }
 
-        [HttpGet("user/{userId}")]
-        public async Task<IActionResult> GetUserTrips(string userId)
+        [HttpGet]
+        public async Task<IActionResult> GetTrips([FromQuery] string? userId, [FromQuery] string? phone)
         {
-            var trips = await _tripService.GetTripsByUserIdAsync(userId);
-            return Ok(trips);
+            if (string.IsNullOrEmpty(userId)) return Ok(new { success = true, trips = new object[] { } });
+            var trips = await _tripService.GetTripsByUserIdAsync(userId, phone);
+            return Ok(new { success = true, trips });
+        }
+
+        [HttpGet("user/{userId}")]
+        public async Task<IActionResult> GetUserTrips(string userId, [FromQuery] string? phone)
+        {
+            var trips = await _tripService.GetTripsByUserIdAsync(userId, phone);
+            return Ok(new { success = true, trips });
         }
 
         [HttpGet("{tripId}")]
@@ -29,24 +37,22 @@ namespace TripDistribution.Api.Controllers
             var trip = await _tripService.GetTripByIdAsync(tripId);
             if (trip == null) return NotFound();
             
-            var groups = await _tripService.GetGroupsByTripIdAsync(tripId);
             var members = await _tripService.GetPersonsByTripIdAsync(tripId);
-
-            return Ok(new { trip, groups, members });
+            return Ok(new { success = true, trip, members });
         }
 
         [HttpPost]
         public async Task<IActionResult> CreateTrip([FromBody] CreateTripRequestDto request)
         {
             var trip = await _tripService.CreateTripAsync(request);
-            return Ok(trip);
+            return Ok(new { success = true, trip });
         }
 
         [HttpPost("members")]
         public async Task<IActionResult> AddMember([FromBody] AddMemberRequestDto request)
         {
             var person = await _tripService.AddMemberAsync(request);
-            return Ok(person);
+            return Ok(new { success = true, person });
         }
 
         [HttpPost("sync")]

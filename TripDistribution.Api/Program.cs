@@ -1,3 +1,4 @@
+using System;
 using System.Net;
 using System.Net.Sockets;
 using TripDistribution.Api.Middleware;
@@ -74,6 +75,9 @@ if (app.Environment.IsDevelopment())
 
 // Redirect root / to /swagger
 app.MapGet("/", () => Results.Redirect("/swagger"));
+
+// Health check endpoint for Mobile & Web clients
+app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", time = DateTime.UtcNow }));
 
 app.UseCors("AllowAll");
 app.UseAuthorization();
