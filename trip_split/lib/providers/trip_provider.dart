@@ -63,10 +63,19 @@ class TripProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void deleteTrip(String tripId) {
+  bool deleteTrip(String tripId) {
+    final trip = getTrip(tripId);
+    if (trip == null) return false;
+
+    // RULE: Admin CANNOT delete trip if members exist!
+    if (trip.allMembers.isNotEmpty) {
+      return false; // Deletion blocked because members are present
+    }
+
     _trips.removeWhere((t) => t.id == tripId);
     _persist();
     notifyListeners();
+    return true;
   }
 
   Trip? getTrip(String tripId) {

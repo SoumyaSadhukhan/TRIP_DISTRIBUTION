@@ -185,6 +185,7 @@ class AuthProvider extends ChangeNotifier {
     required String password,
     required String confirmPassword,
     String? otp,
+    int dietType = 0,
   }) async {
     if (phone.trim().isEmpty) {
       _errorMessage = 'Phone number is required';
@@ -216,6 +217,7 @@ class AuthProvider extends ChangeNotifier {
       fullName: fullName.trim(),
       password: password,
       otp: otp,
+      dietType: dietType,
     );
 
     _isLoading = false;

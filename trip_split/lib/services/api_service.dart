@@ -1,6 +1,6 @@
 // lib/services/api_service.dart
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/friend.dart';
@@ -18,24 +18,30 @@ class ApiService {
 
   List<String> get candidateUrls {
     if (kIsWeb) {
-      return ['http://localhost:5000/api', 'http://127.0.0.1:5000/api'];
+      return ['http://localhost:7266/api', 'http://127.0.0.1:7266/api'];
     }
     return [
-      'http://192.168.1.111:5000/api', // LAN / Wi-Fi Router IP
-      'http://10.234.230.248:5000/api',// Wi-Fi LAN IP
-      'http://10.100.83.76:5000/api',  // Ethernet / Hotspot IP
-      'http://127.0.0.1:5000/api',     // USB / adb reverse
-      'http://localhost:5000/api',     // Localhost
-      'http://10.0.2.2:5000/api',      // Android Emulator loopback
+      'http://10.130.176.248:7266/api', // Laptop Wi-Fi IP
+      'http://192.168.1.111:7266/api',  // Alternative LAN IP
+      'http://127.0.0.1:7266/api',      // USB / adb reverse
+      'http://localhost:7266/api',      // Localhost
+      'http://10.0.2.2:7266/api',       // Android Emulator loopback
     ];
   }
 
-  Future<void> setCustomServerIp(String ip) async {
-    final cleanIp = ip.trim().replaceAll('http://', '').replaceAll('/api', '').replaceAll(':5000', '');
-    if (cleanIp.isNotEmpty) {
-      _cachedActiveBaseUrl = 'http://$cleanIp:5000/api';
+  Future<void> setCustomServerIp(String ipOrHostAndPort) async {
+    String input = ipOrHostAndPort.trim()
+        .replaceAll('http://', '')
+        .replaceAll('https://', '')
+        .replaceAll('/api', '');
+
+    if (input.isNotEmpty) {
+      if (!input.contains(':')) {
+        input = '$input:5246'; // Default fallback port
+      }
+      _cachedActiveBaseUrl = 'http://$input/api';
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_customIpKey, cleanIp);
+      await prefs.setString(_customIpKey, input);
     }
   }
 
@@ -58,7 +64,8 @@ class ApiService {
     if (_cachedActiveBaseUrl == null) {
       final savedIp = await getCustomServerIp();
       if (savedIp != null && savedIp.isNotEmpty) {
-        _cachedActiveBaseUrl = 'http://$savedIp:5000/api';
+        final clean = savedIp.contains(':') ? savedIp : '$savedIp:5246';
+        _cachedActiveBaseUrl = 'http://$clean/api';
       }
     }
 
@@ -69,6 +76,7 @@ class ApiService {
     Exception? lastError;
     for (final base in urlsToTry) {
       try {
+        debugPrint('[API] POST $base$endpoint');
         final response = await http
             .post(
               Uri.parse('$base$endpoint'),
@@ -77,9 +85,11 @@ class ApiService {
             )
             .timeout(const Duration(seconds: 3));
 
+        debugPrint('[API] POST $base$endpoint => Status ${response.statusCode}');
         _cachedActiveBaseUrl = base;
         return response;
       } catch (e) {
+        debugPrint('[API ERR] POST $base$endpoint => $e');
         lastError = e is Exception ? e : Exception(e.toString());
       }
     }
@@ -90,7 +100,8 @@ class ApiService {
     if (_cachedActiveBaseUrl == null) {
       final savedIp = await getCustomServerIp();
       if (savedIp != null && savedIp.isNotEmpty) {
-        _cachedActiveBaseUrl = 'http://$savedIp:5000/api';
+        final clean = savedIp.contains(':') ? savedIp : '$savedIp:5246';
+        _cachedActiveBaseUrl = 'http://$clean/api';
       }
     }
 
@@ -101,6 +112,7 @@ class ApiService {
     Exception? lastError;
     for (final base in urlsToTry) {
       try {
+        debugPrint('[API] GET $base$endpoint');
         final response = await http
             .get(
               Uri.parse('$base$endpoint'),
@@ -108,23 +120,26 @@ class ApiService {
             )
             .timeout(const Duration(seconds: 3));
 
+        debugPrint('[API] GET $base$endpoint => Status ${response.statusCode}');
         _cachedActiveBaseUrl = base;
         return response;
       } catch (e) {
+        debugPrint('[API ERR] GET $base$endpoint => $e');
         lastError = e is Exception ? e : Exception(e.toString());
       }
     }
     throw lastError ?? Exception('Could not reach server');
   }
 
-  Future<bool> testConnection(String ipOrUrl) async {
+  Future<bool> testConnection(String ipOrHostAndPort) async {
     try {
-      String fullUrl = ipOrUrl.trim();
+      String fullUrl = ipOrHostAndPort.trim();
       if (!fullUrl.startsWith('http://') && !fullUrl.startsWith('https://')) {
         fullUrl = 'http://$fullUrl';
       }
-      if (!fullUrl.contains(':5000')) {
-        fullUrl += ':5000';
+      final cleanHost = fullUrl.replaceAll('http://', '').replaceAll('https://', '');
+      if (!cleanHost.contains(':')) {
+        fullUrl += ':5246';
       }
       if (!fullUrl.endsWith('/api')) {
         fullUrl += '/api';
@@ -132,6 +147,13 @@ class ApiService {
 
       final res = await http.get(Uri.parse('$fullUrl/health')).timeout(const Duration(seconds: 3));
       if (res.statusCode == 200) {
+        _cachedActiveBaseUrl = fullUrl;
+        return true;
+      }
+
+      // Check swagger endpoint for 200 OK response
+      final swaggerRes = await http.get(Uri.parse(fullUrl.replaceAll('/api', '/swagger'))).timeout(const Duration(seconds: 3));
+      if (swaggerRes.statusCode == 200) {
         _cachedActiveBaseUrl = fullUrl;
         return true;
       }
@@ -148,20 +170,23 @@ class ApiService {
     try {
       final response = await _smartPost(
         '/auth/send-otp',
-        {'phone': phone, 'purpose': purpose},
+        {'phoneNumber': phone, 'purpose': purpose},
       );
 
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
-        return {'success': true, 'message': data['message'], 'otp': data['otp']};
+        final code = data['otpCode'] ?? data['otp'];
+        return {
+          'success': true,
+          'message': data['message'] ?? 'OTP sent to $phone',
+          'otp': code,
+        };
       }
       return {'success': false, 'message': data['message'] ?? 'Failed to send OTP.'};
     } catch (e) {
-      final mockOtp = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000)).toString();
       return {
-        'success': true,
-        'message': 'Simulated OTP generated (Offline Mode): $mockOtp',
-        'otp': mockOtp,
+        'success': false,
+        'message': 'Cannot connect to ASP.NET Core Web API. Please start your API server project or check your Server Config.',
       };
     }
   }
@@ -174,7 +199,7 @@ class ApiService {
     try {
       final response = await _smartPost(
         '/auth/verify-otp',
-        {'phone': phone, 'otp': otp, 'purpose': purpose},
+        {'phoneNumber': phone, 'otpCode': otp, 'purpose': purpose},
       );
 
       final data = jsonDecode(response.body);
@@ -183,7 +208,10 @@ class ApiService {
       }
       return {'success': false, 'message': data['message'] ?? 'OTP verification failed.'};
     } catch (e) {
-      return {'success': true, 'message': 'OTP verified (Offline Mode)'};
+      return {
+        'success': false,
+        'message': 'API Server is offline. Please start your ASP.NET Core API project.',
+      };
     }
   }
 
@@ -198,10 +226,10 @@ class ApiService {
       final response = await _smartPost(
         '/auth/register',
         {
-          'phone': phone,
+          'phoneNumber': phone,
           'fullName': fullName,
           'password': password,
-          'otp': otp,
+          'otpCode': otp ?? '',
           'dietType': dietType,
         },
       );
@@ -209,29 +237,22 @@ class ApiService {
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
         final user = UserModel(
-          id: data['user']['id'],
-          phone: data['user']['phone'],
-          fullName: data['user']['fullName'],
-          dietType: data['user']['dietType'] ?? dietType,
-          token: data['token'],
-          createdAt: DateTime.tryParse(data['user']['createdAt'] ?? '') ?? DateTime.now(),
+          id: data['userId'] ?? data['user']?['id'] ?? 'usr_${DateTime.now().millisecondsSinceEpoch}',
+          phone: data['phoneNumber'] ?? data['user']?['phone'] ?? phone,
+          fullName: data['fullName'] ?? data['user']?['fullName'] ?? fullName,
+          dietType: (data['dietType'] as int? ?? dietType),
+          token: data['token'] ?? 'token_${DateTime.now().millisecondsSinceEpoch}',
+          createdAt: DateTime.now(),
           lastLoginAt: DateTime.now(),
         );
-        return {'success': true, 'user': user, 'token': data['token']};
+        return {'success': true, 'user': user, 'token': user.token};
       }
       return {'success': false, 'message': data['message'] ?? 'Registration failed.'};
     } catch (e) {
-      final mockToken = 'tok_${DateTime.now().millisecondsSinceEpoch}';
-      final user = UserModel(
-        id: 'usr_${DateTime.now().millisecondsSinceEpoch}',
-        phone: phone,
-        fullName: fullName,
-        dietType: dietType,
-        token: mockToken,
-        createdAt: DateTime.now(),
-        lastLoginAt: DateTime.now(),
-      );
-      return {'success': true, 'user': user, 'token': mockToken};
+      return {
+        'success': false,
+        'message': 'Cannot connect to ASP.NET Core Web API. Please start your API server project or check your Server Config.',
+      };
     }
   }
 
@@ -242,26 +263,28 @@ class ApiService {
     try {
       final response = await _smartPost(
         '/auth/login',
-        {'phone': phone, 'password': password},
+        {'phoneNumber': phone, 'password': password},
       );
 
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
         final user = UserModel(
-          id: data['user']['id'],
-          phone: data['user']['phone'],
-          fullName: data['user']['fullName'],
-          dietType: data['user']['dietType'] ?? 0,
-          isBiometricEnabled: data['user']['isBiometricEnabled'] == true,
+          id: data['userId'] ?? data['user']?['id'] ?? 'usr_${DateTime.now().millisecondsSinceEpoch}',
+          phone: data['phoneNumber'] ?? data['user']?['phone'] ?? phone,
+          fullName: data['fullName'] ?? data['user']?['fullName'] ?? 'User',
+          dietType: (data['dietType'] as int? ?? 0),
           token: data['token'],
-          createdAt: DateTime.tryParse(data['user']['createdAt'] ?? '') ?? DateTime.now(),
+          createdAt: DateTime.now(),
           lastLoginAt: DateTime.now(),
         );
         return {'success': true, 'user': user, 'token': data['token']};
       }
-      return {'success': false, 'message': data['message'] ?? 'Invalid credentials.'};
+      return {'success': false, 'message': data['message'] ?? 'Invalid phone number or password.'};
     } catch (e) {
-      return {'success': false, 'message': 'Could not reach server. Please check Wi-Fi / Server IP settings.'};
+      return {
+        'success': false,
+        'message': 'Cannot connect to ASP.NET Core Web API. Please start your API server project or check your Server Config.',
+      };
     }
   }
 
@@ -586,13 +609,14 @@ class ApiService {
 
   Future<bool> deleteTrip(String tripId, {String? token, String? userId}) async {
     try {
-      String url = '/trips/$tripId';
-      if (userId != null && userId.isNotEmpty) {
-        url += '?userId=$userId';
-      }
-      final response = await http
-          .delete(Uri.parse('$baseUrl$url'), headers: _headers(token))
-          .timeout(const Duration(seconds: 5));
+      final response = await _smartPost(
+        '/trips/delete',
+        {
+          'tripId': tripId,
+          if (userId != null) 'userId': userId,
+        },
+        token,
+      );
       final data = jsonDecode(response.body);
       return response.statusCode == 200 && data['success'] == true;
     } catch (e) {

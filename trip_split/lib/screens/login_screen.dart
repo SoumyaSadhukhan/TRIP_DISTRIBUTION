@@ -25,10 +25,13 @@ class _LoginScreenState extends State<LoginScreen>
   final _regOtpController = TextEditingController();
   final _regPasswordController = TextEditingController();
   final _regConfirmPasswordController = TextEditingController();
+  int _selectedDietType = 0;
 
   bool _isSignUp = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isActionLoading = false;
+  bool _isOtpLoading = false;
 
   late TabController _tabController;
 
@@ -51,12 +54,14 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _loadSavedPhone() async {
-    final phone = await context.read<AuthProvider>().storageService.getSavedPhone();
-    if (phone != null && phone.isNotEmpty && mounted) {
-      setState(() {
-        _loginPhoneController.text = phone;
-      });
-    }
+    try {
+      final phone = await context.read<AuthProvider>().storageService.getSavedPhone();
+      if (phone != null && phone.isNotEmpty && mounted) {
+        setState(() {
+          _loginPhoneController.text = phone;
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -87,21 +92,48 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final authProvider = context.read<AuthProvider>();
-    final phone = _loginPhoneController.text.trim();
-    final password = _loginPasswordController.text;
+    setState(() => _isActionLoading = true);
+    try {
+      final authProvider = context.read<AuthProvider>();
+      final phone = _loginPhoneController.text.trim();
+      final password = _loginPasswordController.text;
 
-    final success = await authProvider.login(phone, password);
-    if (success && mounted) {
-      _onLoginSuccess();
+      final success = await authProvider.login(phone, password);
+      if (success && mounted) {
+        _onLoginSuccess();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Login error: $e'),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isActionLoading = false);
+      }
     }
   }
 
   Future<void> _handleBiometricLogin() async {
-    final authProvider = context.read<AuthProvider>();
-    final success = await authProvider.loginWithBiometrics();
-    if (success && mounted) {
-      _onLoginSuccess();
+    setState(() => _isActionLoading = true);
+    try {
+      final authProvider = context.read<AuthProvider>();
+      final success = await authProvider.loginWithBiometrics();
+      if (success && mounted) {
+        _onLoginSuccess();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Biometric error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isActionLoading = false);
     }
   }
 
@@ -117,32 +149,42 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
 
-    final authProvider = context.read<AuthProvider>();
-    final success = await authProvider.sendOtp(phone, purpose: 'REGISTER');
-    if (success && mounted && authProvider.lastSentOtp != null) {
-      _regOtpController.text = authProvider.lastSentOtp!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.mark_email_read_rounded, color: Colors.white),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text('OTP sent to $phone: ${authProvider.lastSentOtp}'),
-              ),
-            ],
+    setState(() => _isOtpLoading = true);
+    try {
+      final authProvider = context.read<AuthProvider>();
+      final success = await authProvider.sendOtp(phone, purpose: 'REGISTER');
+      if (success && mounted && authProvider.lastSentOtp != null) {
+        _regOtpController.text = authProvider.lastSentOtp!;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.mark_email_read_rounded, color: Colors.white),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('OTP sent to $phone: ${authProvider.lastSentOtp}'),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF059669),
+            duration: const Duration(seconds: 5),
           ),
-          backgroundColor: const Color(0xFF059669),
-          duration: const Duration(seconds: 5),
-        ),
-      );
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to send OTP: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isOtpLoading = false);
     }
   }
 
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final authProvider = context.read<AuthProvider>();
     final phone = _regPhoneController.text.trim();
     final name = _regNameController.text.trim();
     final otp = _regOtpController.text.trim();
@@ -159,16 +201,29 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
 
-    final success = await authProvider.register(
-      phone: phone,
-      fullName: name,
-      password: password,
-      confirmPassword: confirm,
-      otp: otp,
-    );
+    setState(() => _isActionLoading = true);
+    try {
+      final authProvider = context.read<AuthProvider>();
+      final success = await authProvider.register(
+        phone: phone,
+        fullName: name,
+        password: password,
+        confirmPassword: confirm,
+        otp: otp,
+        dietType: _selectedDietType,
+      );
 
-    if (success && mounted) {
-      _onLoginSuccess();
+      if (success && mounted) {
+        _onLoginSuccess();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Registration failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isActionLoading = false);
     }
   }
 
@@ -179,6 +234,7 @@ class _LoginScreenState extends State<LoginScreen>
     final confirmPassCtrl = TextEditingController();
     bool obscurePass = true;
     bool otpSent = false;
+    bool isResetting = false;
     String? localOtp;
 
     showModalBottomSheet(
@@ -239,18 +295,20 @@ class _LoginScreenState extends State<LoginScreen>
                     prefixIcon: const Icon(Icons.phone_android_rounded),
                     suffixIcon: TextButton(
                       onPressed: () async {
-                        final auth = context.read<AuthProvider>();
-                        final success = await auth.sendOtp(
-                          phoneCtrl.text.trim(),
-                          purpose: 'FORGOT_PASSWORD',
-                        );
-                        if (success) {
-                          setSheetState(() {
-                            otpSent = true;
-                            localOtp = auth.lastSentOtp;
-                            if (localOtp != null) otpCtrl.text = localOtp!;
-                          });
-                        }
+                        try {
+                          final auth = context.read<AuthProvider>();
+                          final success = await auth.sendOtp(
+                            phoneCtrl.text.trim(),
+                            purpose: 'FORGOT_PASSWORD',
+                          );
+                          if (success) {
+                            setSheetState(() {
+                              otpSent = true;
+                              localOtp = auth.lastSentOtp;
+                              if (localOtp != null) otpCtrl.text = localOtp!;
+                            });
+                          }
+                        } catch (_) {}
                       },
                       child: Text(otpSent ? 'Resend' : 'Send OTP'),
                     ),
@@ -266,7 +324,7 @@ class _LoginScreenState extends State<LoginScreen>
                       border: Border.all(color: Colors.green.shade200),
                     ),
                     child: Text(
-                      '🔐 Simulated SMS OTP: $localOtp',
+                      'OTP Code: $localOtp',
                       style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.bold, fontSize: 12),
                     ),
                   ),
@@ -301,7 +359,7 @@ class _LoginScreenState extends State<LoginScreen>
                 ),
                 const SizedBox(height: 14),
 
-                // Confirm Password
+                // Confirm New Password
                 TextField(
                   controller: confirmPassCtrl,
                   obscureText: obscurePass,
@@ -316,29 +374,40 @@ class _LoginScreenState extends State<LoginScreen>
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed: () async {
-                      final auth = context.read<AuthProvider>();
-                      final ok = await auth.resetPassword(
-                        phone: phoneCtrl.text.trim(),
-                        otp: otpCtrl.text.trim(),
-                        newPassword: newPassCtrl.text,
-                        confirmPassword: confirmPassCtrl.text,
-                      );
-                      if (ok && mounted) {
-                        Navigator.pop(sheetContext);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Password reset successfully! Please sign in.'),
-                            backgroundColor: Color(0xFF059669),
-                          ),
+                    onPressed: isResetting ? null : () async {
+                      setSheetState(() => isResetting = true);
+                      try {
+                        final auth = context.read<AuthProvider>();
+                        final ok = await auth.resetPassword(
+                          phone: phoneCtrl.text.trim(),
+                          otp: otpCtrl.text.trim(),
+                          newPassword: newPassCtrl.text,
+                          confirmPassword: confirmPassCtrl.text,
                         );
+                        if (ok && mounted) {
+                          Navigator.pop(sheetContext);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Password reset successfully! Please sign in.'),
+                              backgroundColor: Color(0xFF059669),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                        );
+                      } finally {
+                        setSheetState(() => isResetting = false);
                       }
                     },
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
-                    child: const Text('Update Password'),
+                    child: isResetting
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Text('Update Password'),
                   ),
                 ),
               ],
@@ -352,7 +421,7 @@ class _LoginScreenState extends State<LoginScreen>
   void _showServerConfigSheet() async {
     final apiService = context.read<AuthProvider>().apiService;
     final currentIp = await apiService.getCustomServerIp() ?? '';
-    final ipCtrl = TextEditingController(text: currentIp);
+    final ipCtrl = TextEditingController(text: currentIp.isEmpty ? '10.130.176.248' : currentIp);
     String testStatus = '';
     bool testing = false;
 
@@ -392,38 +461,76 @@ class _LoginScreenState extends State<LoginScreen>
                 const SizedBox(height: 18),
                 const Row(
                   children: [
-                    Icon(Icons.wifi_tethering_rounded, color: _primaryIndigo, size: 26),
+                    Icon(Icons.dns_rounded, color: _primaryIndigo, size: 26),
                     SizedBox(width: 10),
                     Text(
-                      'Host PC Server / Wi-Fi IP',
+                      'API Server Config & IP',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'When connected to the same Wi-Fi or Mobile Hotspot, enter your host PC IP address below:',
+                  'Current Active Base URL: ${apiService.baseUrl}',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _primaryIndigo),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Enter your Host PC IP Address and Port:',
                   style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 const Text(
-                  'Suggested Host PC IP Addresses:',
+                  'Quick Host Presets:',
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    '192.168.1.111',
-                    '10.234.230.248',
-                    '10.100.83.76',
+                    '10.130.176.248',
+                    'localhost',
                     '127.0.0.1',
-                  ].map((ip) => ActionChip(
-                    label: Text(ip, style: const TextStyle(fontSize: 12)),
+                    '10.0.2.2',
+                    '192.168.1.111',
+                  ].map((host) => ActionChip(
+                    avatar: Icon(
+                      host == 'localhost' || host == '127.0.0.1' ? Icons.laptop_rounded : Icons.wifi_rounded,
+                      size: 14,
+                      color: _primaryIndigo,
+                    ),
+                    label: Text(host, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                     onPressed: () {
                       setSheetState(() {
-                        ipCtrl.text = ip;
+                        final currentPort = ipCtrl.text.contains(':') ? ipCtrl.text.split(':').last : '5000';
+                        ipCtrl.text = '$host:$currentPort';
+                        testStatus = '';
+                      });
+                    },
+                  )).toList(),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Quick Port Selectors:',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    '5000',
+                    '5246',
+                    '7266',
+                    '8080',
+                  ].map((port) => ActionChip(
+                    avatar: const Icon(Icons.numbers_rounded, size: 14, color: _primaryIndigo),
+                    label: Text('Port $port', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    onPressed: () {
+                      setSheetState(() {
+                        final host = ipCtrl.text.contains(':') ? ipCtrl.text.split(':').first : (ipCtrl.text.isEmpty ? '10.130.176.248' : ipCtrl.text);
+                        ipCtrl.text = '$host:$port';
                         testStatus = '';
                       });
                     },
@@ -433,55 +540,93 @@ class _LoginScreenState extends State<LoginScreen>
                 TextField(
                   controller: ipCtrl,
                   decoration: InputDecoration(
-                    labelText: 'Server IP Address (Port 5000)',
-                    hintText: 'e.g. 192.168.1.111',
+                    labelText: 'API Server IP : Port',
+                    hintText: 'e.g. 10.130.176.248:5000 or localhost:5246',
                     prefixIcon: const Icon(Icons.computer_rounded),
                     suffixIcon: TextButton(
                       onPressed: testing ? null : () async {
                         setSheetState(() {
                           testing = true;
-                          testStatus = 'Connecting...';
+                          testStatus = 'Connecting to ASP.NET Core API...';
                         });
-                        final ok = await apiService.testConnection(ipCtrl.text.trim());
-                        setSheetState(() {
-                          testing = false;
-                          testStatus = ok
-                              ? 'Connected to SQL Server backend successfully!'
-                              : 'Could not connect. Check PC firewall & Wi-Fi.';
-                        });
+                        try {
+                          final ok = await apiService.testConnection(ipCtrl.text.trim());
+                          setSheetState(() {
+                            testing = false;
+                            testStatus = ok
+                                ? 'Connected to ASP.NET Core Web API successfully!'
+                                : 'Could not connect. Check PC firewall & active API port.';
+                          });
+                        } catch (e) {
+                          setSheetState(() {
+                            testing = false;
+                            testStatus = 'Error: $e';
+                          });
+                        }
                       },
-                      child: const Text('Test'),
+                      child: testing
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Text('Test Connection'),
                     ),
                   ),
                 ),
                 if (testStatus.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    testStatus,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: testStatus.contains('successfully') ? Colors.green.shade700 : Colors.red.shade700,
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: testStatus.contains('successfully') ? Colors.green.shade50 : Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: testStatus.contains('successfully') ? Colors.green.shade300 : Colors.orange.shade300,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          testStatus.contains('successfully') ? Icons.check_circle : Icons.warning_amber_rounded,
+                          color: testStatus.contains('successfully') ? Colors.green.shade700 : Colors.orange.shade800,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            testStatus,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: testStatus.contains('successfully') ? Colors.green.shade900 : Colors.orange.shade900,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
                 const SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
-                  child: FilledButton(
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.save_rounded),
+                    label: const Text('Save & Apply IP Config'),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                     onPressed: () async {
-                      await apiService.setCustomServerIp(ipCtrl.text.trim());
-                      if (mounted) {
-                        Navigator.pop(sheetCtx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Server IP updated to: ${ipCtrl.text.trim()}'),
-                            backgroundColor: const Color(0xFF059669),
-                          ),
-                        );
-                      }
+                      try {
+                        await apiService.setCustomServerIp(ipCtrl.text.trim());
+                        if (mounted) {
+                          Navigator.pop(sheetCtx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Active API Base URL set to ${apiService.baseUrl}'),
+                              backgroundColor: Colors.green.shade700,
+                            ),
+                          );
+                        }
+                      } catch (_) {}
                     },
-                    child: const Text('Save Server IP'),
                   ),
                 ),
               ],
@@ -496,35 +641,25 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final size = MediaQuery.of(context).size;
+    final isCompact = size.height < 700;
 
     return Scaffold(
-      body: Stack(
-        children: [
-          // ── Gradient header ─────────────────────────────────────
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: size.height * 0.38,
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFF1E1B4B),
-                    _primaryIndigo,
-                    _violet,
-                  ],
-                ),
-              ),
-              child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+      backgroundColor: const Color(0xFF1E1B4B),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: Column(
+                  children: [
+                    // Header Section
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: isCompact ? 10 : 16,
+                      ),
+                      child: Row(
                         children: [
                           Container(
                             padding: const EdgeInsets.all(10),
@@ -532,7 +667,7 @@ class _LoginScreenState extends State<LoginScreen>
                               color: Colors.white.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(14),
                             ),
-                            child: const Icon(Icons.flight_takeoff_rounded, color: Colors.white, size: 26),
+                            child: const Icon(Icons.flight_takeoff_rounded, color: Colors.white, size: 24),
                           ),
                           const SizedBox(width: 12),
                           const Expanded(
@@ -564,300 +699,307 @@ class _LoginScreenState extends State<LoginScreen>
                               ),
                               child: const Icon(Icons.wifi_tethering_rounded, color: Colors.white, size: 20),
                             ),
-                            tooltip: 'Server & Wi-Fi / Hotspot IP Settings',
+                            tooltip: 'Server & Wi-Fi Settings',
                             onPressed: _showServerConfigSheet,
                           ),
                         ],
                       ),
-                      const Spacer(),
-                      Text(
-                        _isSignUp ? 'Create Account' : 'Welcome Back',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _isSignUp
-                            ? 'Verify phone via OTP & store in database'
-                            : 'Sign in to access your synchronized trips',
-                        style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 13),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+                    ),
 
-          // ── Main Card Form ─────────────────────────────────────────
-          Positioned.fill(
-            top: size.height * 0.30,
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Color(0xFFF8F9FF),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-              ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      // Tab Bar (Login vs Register)
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: TabBar(
-                          controller: _tabController,
-                          indicator: BoxDecoration(
-                            color: _primaryIndigo,
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          indicatorSize: TabBarIndicatorSize.tab,
-                          labelColor: Colors.white,
-                          unselectedLabelColor: Colors.grey.shade700,
-                          dividerColor: Colors.transparent,
-                          tabs: const [
-                            Tab(text: 'Sign In'),
-                            Tab(text: 'Register with OTP'),
+                    // Title Bar
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _isSignUp ? 'Create Account' : 'Welcome Back',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: isCompact ? 22 : 26,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _isSignUp
+                                  ? 'Verify phone via OTP & store in SQL database'
+                                  : 'Sign in to access your synchronized trips',
+                              style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12),
+                            ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 20),
+                    ),
+                    const SizedBox(height: 8),
 
-                      // Error message alert
-                      if (auth.errorMessage != null)
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade50,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.red.shade200),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.error_outline_rounded, color: Colors.red.shade700, size: 20),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  auth.errorMessage!,
-                                  style: TextStyle(color: Colors.red.shade800, fontSize: 12, fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                            ],
-                          ),
+                    // Scrollable Card Container
+                    Expanded(
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFF8F9FF),
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
                         ),
-
-                      // Success message alert
-                      if (auth.successMessage != null)
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.green.shade50,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.green.shade200),
+                        child: SingleChildScrollView(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: isCompact ? 16 : 24,
                           ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.check_circle_outline_rounded, color: Colors.green.shade700, size: 20),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  auth.successMessage!,
-                                  style: TextStyle(color: Colors.green.shade800, fontSize: 12, fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      // ── LOGIN FORM ────────────────────────────────
-                      if (!_isSignUp) ...[
-                        TextFormField(
-                          controller: _loginPhoneController,
-                          keyboardType: TextInputType.phone,
-                          decoration: const InputDecoration(
-                            labelText: 'Phone Number',
-                            hintText: 'e.g. 9876543210',
-                            prefixIcon: Icon(Icons.phone_android_rounded),
-                          ),
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Phone number is required' : null,
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _loginPasswordController,
-                          obscureText: _obscurePassword,
-                          decoration: InputDecoration(
-                            labelText: 'Password',
-                            prefixIcon: const Icon(Icons.lock_outline_rounded),
-                            suffixIcon: IconButton(
-                              icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                            ),
-                          ),
-                          validator: (v) => (v == null || v.isEmpty) ? 'Password is required' : null,
-                        ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: _showForgotPasswordSheet,
-                            child: const Text('Forgot Password? (OTP Reset)', style: TextStyle(fontWeight: FontWeight.w600)),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton(
-                            onPressed: auth.isLoading ? null : _handleLogin,
-                            child: auth.isLoading
-                                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                : const Text('Sign In'),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Biometric / Fingerprint / Device PIN Quick Unlock Button
-                        OutlinedButton.icon(
-                          onPressed: auth.isLoading ? null : _handleBiometricLogin,
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                            side: BorderSide(color: _primaryIndigo.withValues(alpha: 0.3)),
-                          ),
-                          icon: const Icon(Icons.fingerprint_rounded, color: _primaryIndigo, size: 24),
-                          label: const Text(
-                            'Quick Sign In with Fingerprint / PIN',
-                            style: TextStyle(color: _primaryIndigo, fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ],
-
-                      // ── REGISTER FORM ─────────────────────────────
-                      if (_isSignUp) ...[
-                        TextFormField(
-                          controller: _regNameController,
-                          textCapitalization: TextCapitalization.words,
-                          decoration: const InputDecoration(
-                            labelText: 'Full Name',
-                            hintText: 'e.g. John Doe',
-                            prefixIcon: Icon(Icons.person_outline_rounded),
-                          ),
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter your name' : null,
-                        ),
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: _regPhoneController,
-                          keyboardType: TextInputType.phone,
-                          decoration: InputDecoration(
-                            labelText: 'Phone Number',
-                            hintText: 'e.g. 9876543210',
-                            prefixIcon: const Icon(Icons.phone_android_rounded),
-                            suffixIcon: TextButton(
-                              onPressed: auth.isLoading ? null : _handleSendRegOtp,
-                              child: Text(auth.isOtpSent ? 'Resend' : 'Send OTP'),
-                            ),
-                          ),
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Phone is required' : null,
-                        ),
-                        if (auth.lastSentOtp != null) ...[
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.green.shade200),
-                            ),
-                            child: Row(
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
                               children: [
-                                const Icon(Icons.sms_rounded, color: Color(0xFF059669), size: 18),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Simulated SMS OTP Code: ${auth.lastSentOtp}',
-                                    style: const TextStyle(color: Color(0xFF059669), fontWeight: FontWeight.w700, fontSize: 12),
+                                // Tab Switcher
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade200,
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: TabBar(
+                                    controller: _tabController,
+                                    indicator: BoxDecoration(
+                                      color: _primaryIndigo,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    indicatorSize: TabBarIndicatorSize.tab,
+                                    labelColor: Colors.white,
+                                    unselectedLabelColor: Colors.grey.shade700,
+                                    dividerColor: Colors.transparent,
+                                    tabs: const [
+                                      Tab(text: 'Sign In'),
+                                      Tab(text: 'Register with OTP'),
+                                    ],
                                   ),
                                 ),
+                                const SizedBox(height: 18),
+
+                                // Error Banner
+                                if (auth.errorMessage != null)
+                                  Container(
+                                    margin: const EdgeInsets.only(bottom: 14),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade50,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: Colors.red.shade200),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.error_outline_rounded, color: Colors.red.shade700, size: 20),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            auth.errorMessage!,
+                                            style: TextStyle(color: Colors.red.shade800, fontSize: 12, fontWeight: FontWeight.w600),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                // Success Banner
+                                if (auth.successMessage != null)
+                                  Container(
+                                    margin: const EdgeInsets.only(bottom: 14),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.shade50,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: Colors.green.shade200),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.check_circle_outline_rounded, color: Colors.green.shade700, size: 20),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            auth.successMessage!,
+                                            style: TextStyle(color: Colors.green.shade800, fontSize: 12, fontWeight: FontWeight.w600),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                // SIGN IN FORM
+                                if (!_isSignUp) ...[
+                                  TextFormField(
+                                    controller: _loginPhoneController,
+                                    keyboardType: TextInputType.phone,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Phone Number',
+                                      hintText: 'e.g. 9876543210',
+                                      prefixIcon: Icon(Icons.phone_android_rounded),
+                                    ),
+                                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Phone number is required' : null,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  TextFormField(
+                                    controller: _loginPasswordController,
+                                    obscureText: _obscurePassword,
+                                    decoration: InputDecoration(
+                                      labelText: 'Password',
+                                      prefixIcon: const Icon(Icons.lock_outline_rounded),
+                                      suffixIcon: IconButton(
+                                        icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                      ),
+                                    ),
+                                    validator: (v) => (v == null || v.isEmpty) ? 'Password is required' : null,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: TextButton(
+                                      onPressed: _showForgotPasswordSheet,
+                                      child: const Text('Forgot Password?', style: TextStyle(color: _primaryIndigo, fontWeight: FontWeight.w600, fontSize: 12)),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: FilledButton(
+                                      onPressed: (_isActionLoading || auth.isLoading) ? null : _handleLogin,
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: _primaryIndigo,
+                                        padding: const EdgeInsets.symmetric(vertical: 16),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                      ),
+                                      child: (_isActionLoading || auth.isLoading)
+                                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                                          : const Text('Sign In', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  OutlinedButton.icon(
+                                    icon: const Icon(Icons.fingerprint_rounded, color: _primaryIndigo),
+                                    label: const Text('Sign In with Biometrics / PIN', style: TextStyle(color: _primaryIndigo, fontWeight: FontWeight.w600)),
+                                    style: OutlinedButton.styleFrom(
+                                      minimumSize: const Size(double.infinity, 48),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      side: BorderSide(color: _primaryIndigo.withValues(alpha: 0.3)),
+                                    ),
+                                    onPressed: _handleBiometricLogin,
+                                  ),
+                                ] else ...[
+                                  // REGISTER WITH OTP FORM
+                                  TextFormField(
+                                    controller: _regNameController,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Full Name',
+                                      prefixIcon: Icon(Icons.person_outline_rounded),
+                                    ),
+                                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Full name is required' : null,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  TextFormField(
+                                    controller: _regPhoneController,
+                                    keyboardType: TextInputType.phone,
+                                    decoration: InputDecoration(
+                                      labelText: 'Phone Number',
+                                      prefixIcon: const Icon(Icons.phone_android_rounded),
+                                      suffixIcon: Padding(
+                                        padding: const EdgeInsets.only(right: 6),
+                                        child: TextButton(
+                                          onPressed: _isOtpLoading ? null : _handleSendRegOtp,
+                                          child: _isOtpLoading
+                                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                              : const Text('Get OTP', style: TextStyle(fontWeight: FontWeight.bold, color: _primaryIndigo)),
+                                        ),
+                                      ),
+                                    ),
+                                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Phone number is required' : null,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  TextFormField(
+                                    controller: _regOtpController,
+                                    keyboardType: TextInputType.number,
+                                    maxLength: 6,
+                                    decoration: const InputDecoration(
+                                      labelText: '6-Digit OTP Code',
+                                      prefixIcon: Icon(Icons.pin_rounded),
+                                      counterText: '',
+                                    ),
+                                    validator: (v) => (v == null || v.trim().length != 6) ? 'Enter 6-digit OTP' : null,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  DropdownButtonFormField<int>(
+                                    value: _selectedDietType,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Dietary Preference',
+                                      prefixIcon: Icon(Icons.restaurant_rounded),
+                                    ),
+                                    items: const [
+                                      DropdownMenuItem(value: 0, child: Text('Vegetarian')),
+                                      DropdownMenuItem(value: 1, child: Text('Non-Vegetarian')),
+                                      DropdownMenuItem(value: 2, child: Text('Non-Veg + Alcoholic')),
+                                    ],
+                                    onChanged: (val) {
+                                      if (val != null) setState(() => _selectedDietType = val);
+                                    },
+                                  ),
+                                  const SizedBox(height: 14),
+                                  TextFormField(
+                                    controller: _regPasswordController,
+                                    obscureText: _obscurePassword,
+                                    decoration: InputDecoration(
+                                      labelText: 'Password',
+                                      prefixIcon: const Icon(Icons.lock_outline_rounded),
+                                      suffixIcon: IconButton(
+                                        icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                      ),
+                                    ),
+                                    validator: (v) => (v == null || v.length < 4) ? 'Minimum 4 characters required' : null,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  TextFormField(
+                                    controller: _regConfirmPasswordController,
+                                    obscureText: _obscureConfirmPassword,
+                                    decoration: InputDecoration(
+                                      labelText: 'Confirm Password',
+                                      prefixIcon: const Icon(Icons.lock_outline_rounded),
+                                      suffixIcon: IconButton(
+                                        icon: Icon(_obscureConfirmPassword ? Icons.visibility_off : Icons.visibility),
+                                        onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                                      ),
+                                    ),
+                                    validator: (v) {
+                                      if (v == null || v.isEmpty) return 'Please confirm your password';
+                                      if (v != _regPasswordController.text) return 'Passwords do not match';
+                                      return null;
+                                    },
+                                  ),
+                                  const SizedBox(height: 20),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: FilledButton(
+                                      onPressed: (_isActionLoading || auth.isLoading) ? null : _handleRegister,
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: _violet,
+                                        padding: const EdgeInsets.symmetric(vertical: 16),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                      ),
+                                      child: (_isActionLoading || auth.isLoading)
+                                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                                          : const Text('Create Account & Verify OTP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
-                        ],
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: _regOtpController,
-                          keyboardType: TextInputType.number,
-                          maxLength: 6,
-                          decoration: const InputDecoration(
-                            labelText: '6-Digit OTP Code',
-                            hintText: 'Enter code sent to phone',
-                            prefixIcon: Icon(Icons.pin_rounded),
-                            counterText: '',
-                          ),
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter OTP to verify account' : null,
                         ),
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: _regPasswordController,
-                          obscureText: _obscurePassword,
-                          decoration: InputDecoration(
-                            labelText: 'Password',
-                            prefixIcon: const Icon(Icons.lock_outline_rounded),
-                            suffixIcon: IconButton(
-                              icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                            ),
-                          ),
-                          validator: (v) {
-                            if (v == null || v.isEmpty) return 'Password required';
-                            if (v.length < 4) return 'Password must be at least 4 characters';
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 14),
-                        TextFormField(
-                          controller: _regConfirmPasswordController,
-                          obscureText: _obscureConfirmPassword,
-                          decoration: InputDecoration(
-                            labelText: 'Confirm Password',
-                            prefixIcon: const Icon(Icons.lock_outline_rounded),
-                            suffixIcon: IconButton(
-                              icon: Icon(_obscureConfirmPassword ? Icons.visibility_off : Icons.visibility),
-                              onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
-                            ),
-                          ),
-                          validator: (v) {
-                            if (v == null || v.isEmpty) return 'Confirm password';
-                            if (v != _regPasswordController.text) return 'Passwords do not match';
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton(
-                            onPressed: auth.isLoading ? null : _handleRegister,
-                            child: auth.isLoading
-                                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                : const Text('Create Account & Sign In'),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 24),
-                    ],
-                  ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ),
-        ],
+            );
+          },
+        ),
       ),
     );
   }

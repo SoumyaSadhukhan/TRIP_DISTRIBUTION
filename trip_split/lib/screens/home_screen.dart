@@ -30,10 +30,13 @@ class _HomeScreenState extends State<HomeScreen> {
     Color(0xFFDC2626),
   ];
 
+  bool _isApiConnected = false;
+  bool _isSyncing = false;
+
   @override
   void initState() {
     super.initState();
-    // Initial sync
+    // Immediate 1st Task: sync with SQL Server DB on app start
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncData());
     // Polling every 5 seconds for real-time multi-device sync
     _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) => _syncData());
@@ -52,28 +55,56 @@ class _HomeScreenState extends State<HomeScreen> {
     if (user == null) return;
 
     try {
-      // 1. Fetch latest trips across shared collaborative accounts
-      final remoteTrips = await auth.apiService.getTrips(
-        userId: user.id,
-        phone: user.phone,
-        token: user.token,
-      );
-      if (mounted && remoteTrips.isNotEmpty) {
-        context.read<TripProvider>().updateFromRemote(remoteTrips);
+      final connected = await auth.apiService.testConnection(auth.apiService.baseUrl);
+      if (mounted && _isApiConnected != connected) {
+        setState(() => _isApiConnected = connected);
       }
 
-      // 2. Fetch live notification count
-      final notifs = await auth.apiService.getNotifications(
-        user.id,
-        token: user.token,
-      );
-      if (mounted) {
-        final unread = notifs.where((n) => !n.isRead).length;
-        if (unread != _unreadNotifs) {
-          setState(() => _unreadNotifs = unread);
+      if (connected) {
+        if (mounted) setState(() => _isSyncing = true);
+
+        // 1. PUSH local offline trips, members, and expenses to SQL Server DB
+        final tripProvider = context.read<TripProvider>();
+        final localTrips = tripProvider.trips;
+        if (localTrips.isNotEmpty) {
+          await auth.apiService.syncTrips(
+            userId: user.id,
+            trips: localTrips,
+            token: user.token,
+          );
+        }
+
+        // 2. FETCH updated remote trips from SQL Server DB
+        final remoteTrips = await auth.apiService.getTrips(
+          userId: user.id,
+          phone: user.phone,
+          token: user.token,
+        );
+        if (mounted && remoteTrips.isNotEmpty) {
+          context.read<TripProvider>().updateFromRemote(remoteTrips);
+        }
+
+        // 3. FETCH live notification count
+        final notifs = await auth.apiService.getNotifications(
+          user.id,
+          token: user.token,
+        );
+        if (mounted) {
+          final unread = notifs.where((n) => !n.isRead).length;
+          if (unread != _unreadNotifs) {
+            setState(() => _unreadNotifs = unread);
+          }
         }
       }
-    } catch (_) {}
+    } catch (_) {
+      if (mounted && _isApiConnected) {
+        setState(() => _isApiConnected = false);
+      }
+    } finally {
+      if (mounted && _isSyncing) {
+        setState(() => _isSyncing = false);
+      }
+    }
   }
 
   void _confirmLogout(BuildContext context) {
@@ -145,6 +176,41 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _showApiStatusDialog(BuildContext context) {
+    final api = context.read<AuthProvider>().apiService;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(
+              _isApiConnected ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
+              color: _isApiConnected ? Colors.green : Colors.amber.shade700,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              _isApiConnected ? 'SQL DB Live' : 'Phone Storage Mode',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Text(
+          _isApiConnected
+              ? 'Connected live to ASP.NET Core Web API at ${api.baseUrl}.\nAll trips, expenses, and settlements are synchronized with your SQL Server database (SPLIT_BILL_DB).'
+              : 'Your ASP.NET Core Web API is currently OFF or unreachable.\nData is saved locally on your phone. Whenever you start your API project on PC, the app syncs everything with SQL Server.',
+          style: const TextStyle(fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -165,6 +231,57 @@ class _HomeScreenState extends State<HomeScreen> {
               pinned: true,
               stretch: true,
               actions: [
+                GestureDetector(
+                  onTap: () => _showApiStatusDialog(context),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _isSyncing
+                          ? Colors.blue.withValues(alpha: 0.3)
+                          : (_isApiConnected ? Colors.green.withValues(alpha: 0.25) : Colors.amber.withValues(alpha: 0.25)),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: _isSyncing ? Colors.lightBlueAccent : (_isApiConnected ? Colors.greenAccent : Colors.amberAccent),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_isSyncing)
+                          const SizedBox(
+                            width: 8,
+                            height: 8,
+                            child: CircularProgressIndicator(
+                              color: Colors.lightBlueAccent,
+                              strokeWidth: 1.5,
+                            ),
+                          )
+                        else
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _isApiConnected ? Colors.greenAccent : Colors.amberAccent,
+                            ),
+                          ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _isSyncing
+                              ? 'Syncing DB...'
+                              : (_isApiConnected ? 'SQL DB Live' : 'Phone Storage'),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 IconButton(
                   icon: Stack(
                     clipBehavior: Clip.none,
@@ -424,6 +541,30 @@ class _HomeScreenState extends State<HomeScreen> {
                           );
                           return false;
                         }
+
+                        if (memberCount > 0) {
+                          showDialog(
+                            context: context,
+                            builder: (dialogCtx) => AlertDialog(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                              icon: const Icon(Icons.block_rounded, color: Colors.red, size: 44),
+                              title: const Text('Cannot Delete Trip', style: TextStyle(fontWeight: FontWeight.w800)),
+                              content: Text(
+                                'This trip currently has $memberCount member(s). Admin can only delete a trip after removing all members first.',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(dialogCtx),
+                                  child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ),
+                          );
+                          return false;
+                        }
+
                         return true;
                       },
                       background: Container(

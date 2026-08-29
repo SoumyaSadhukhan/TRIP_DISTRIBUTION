@@ -1,0 +1,33 @@
+# Visual Studio / VS Code
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# .NET Build outputs
+**/bin/
+**/obj/
+*.dll
+*.pdb
+*.exe
+
+# Logs
+logggg/
+*.log
+
+# Flutter & Dart
+**/trip_split/.dart_tool/
+**/trip_split/build/
+**/trip_split/.flutter-plugins
+**/trip_split/.flutter-plugins-dependencies
+**/trip_split/.packages
+**/trip_split/.pub-cache/
+**/trip_split/.pub/
+
+# Android & iOS build artifacts
+**/trip_split/android/.gradle/
+**/trip_split/android/local.properties
+**/trip_split/ios/Pods/
+**/trip_split/ios/.symlinks/
