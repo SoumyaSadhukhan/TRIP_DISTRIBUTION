@@ -72,7 +72,7 @@ namespace TripDistribution.Services.Services
                     // 2. Fetch Members (from TripMembers & Persons)
                     var members = (await db.QueryAsync<dynamic>(
                         @"SELECT 
-                            ISNULL(member_id, person_id) as id, 
+                            member_id as id, 
                             group_id as groupId, 
                             name as name, 
                             phone_number as phone, 
@@ -83,7 +83,7 @@ namespace TripDistribution.Services.Services
                             owed_amount as owedAmount,
                             balance as balance
                           FROM (
-                              SELECT member_id, group_id, name, phone_number, NULL as user_id, diet_type, diet_name, 0.0 as paid_amount, 0.0 as owed_amount, 0.0 as balance, trip_id FROM TripMembers
+                              SELECT member_id, group_id, name, phone_number, CAST(NULL AS NVARCHAR(100)) as user_id, diet_type, diet_name, CAST(0.0 AS DECIMAL(18,2)) as paid_amount, CAST(0.0 AS DECIMAL(18,2)) as owed_amount, CAST(0.0 AS DECIMAL(18,2)) as balance, trip_id FROM TripMembers
                               UNION ALL
                               SELECT person_id as member_id, group_id, name, phone_number, user_id, diet_type, diet_name, paid_amount, owed_amount, balance, trip_id FROM Persons
                           ) combined
