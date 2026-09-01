@@ -1,5 +1,7 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using System.Threading.Tasks;
 using Dapper;
 using TripDistribution.Models.DTOs;
@@ -16,6 +18,10 @@ namespace TripDistribution.Services.Services
         Task<User?> GetUserByPhoneAsync(string phoneNumber);
         Task<OtpResponseDto> SendOtpAsync(OtpRequestDto request);
         Task<bool> VerifyOtpAsync(VerifyOtpDto request);
+        Task<dynamic> VerifyTokenAsync(string token, string? phone);
+        Task<ApiResponse<bool>> UpdateProfileAsync(string userId, string? fullName, int? dietType);
+        Task<ApiResponse<bool>> ResetPasswordAsync(string phone, string otp, string newPassword);
+        Task<bool> ToggleBiometricAsync(string userId, bool enabled);
     }
 
     public class UserService : IUserService
@@ -34,26 +40,26 @@ namespace TripDistribution.Services.Services
             try
             {
                 using var db = _connectionFactory.CreateConnection();
-                var existing = await db.QueryFirstOrDefaultAsync<User>(
-                    "SELECT * FROM Users WHERE phone_number = @Phone", new { Phone = request.PhoneNumber });
+                var existingUser = await db.QueryFirstOrDefaultAsync<User>(
+                    "SELECT user_id as UserId, phone_number as PhoneNumber FROM Users WHERE phone_number = @Phone",
+                    new { Phone = request.PhoneNumber });
 
-                if (existing != null)
+                if (existingUser != null)
                 {
-                    _logger.LogWarning($"Registration failed: Phone {request.PhoneNumber} already registered.", "AUTH_REGISTER");
-                    return new AuthResponseDto { Success = false, Message = "Phone number already registered." };
+                    _logger.LogWarning($"Registration rejected: Phone {request.PhoneNumber} is already registered.", "AUTH_REGISTER");
+                    return new AuthResponseDto { Success = false, Message = "Phone number is already registered. Please log in." };
                 }
 
-                // Match and verify OTP code if provided
-                if (!string.IsNullOrWhiteSpace(request.OtpCode))
+                if (!string.IsNullOrEmpty(request.OtpCode))
                 {
                     var otp = await db.QueryFirstOrDefaultAsync<OtpVerification>(
-                        "SELECT otp_id as OtpId, phone_number as PhoneNumber, otp_code as OtpCode, is_verified as IsVerified FROM OtpVerification WHERE phone_number = @Phone AND otp_code = @Code AND expires_at > GETDATE()",
+                        "SELECT otp_id as OtpId FROM OtpVerification WHERE phone_number = @Phone AND otp_code = @Code AND is_verified = 0 AND expires_at > GETDATE()",
                         new { Phone = request.PhoneNumber, Code = request.OtpCode });
 
                     if (otp == null)
                     {
-                        _logger.LogWarning($"Registration failed: Invalid or expired OTP {request.OtpCode} for phone {request.PhoneNumber}", "AUTH_REGISTER");
-                        return new AuthResponseDto { Success = false, Message = "Invalid or expired OTP code." };
+                        _logger.LogWarning($"Invalid or expired OTP for registration: Phone {request.PhoneNumber}", "AUTH_REGISTER");
+                        return new AuthResponseDto { Success = false, Message = "Invalid or expired OTP." };
                     }
 
                     await db.ExecuteAsync("UPDATE OtpVerification SET is_verified = 1 WHERE otp_id = @OtpId", new { OtpId = otp.OtpId });
@@ -118,13 +124,22 @@ namespace TripDistribution.Services.Services
                     return new AuthResponseDto { Success = false, Message = "Invalid phone number or password." };
                 }
 
+                // Refresh auth_token if missing
+                var token = user.AuthToken;
+                if (string.IsNullOrEmpty(token))
+                {
+                    token = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
+                    await db.ExecuteAsync("UPDATE Users SET auth_token = @Token, updated_at = GETDATE() WHERE user_id = @UserId",
+                        new { Token = token, UserId = user.UserId });
+                }
+
                 _logger.LogInfo($"User logged in successfully: ID={user.UserId}, Phone={user.PhoneNumber}, Name={user.FullName}", "AUTH_LOGIN");
 
                 return new AuthResponseDto
                 {
                     Success = true,
                     Message = "Login successful",
-                    Token = user.AuthToken,
+                    Token = token,
                     UserId = user.UserId,
                     FullName = user.FullName,
                     PhoneNumber = user.PhoneNumber,
@@ -136,6 +151,138 @@ namespace TripDistribution.Services.Services
             {
                 _logger.LogError($"Error in LoginAsync for phone {request.PhoneNumber}", ex, "AUTH_LOGIN");
                 return new AuthResponseDto { Success = false, Message = $"Login error: {ex.Message}" };
+            }
+        }
+
+        public async Task<dynamic> VerifyTokenAsync(string token, string? phone)
+        {
+            try
+            {
+                using var db = _connectionFactory.CreateConnection();
+                User? user = null;
+
+                if (!string.IsNullOrEmpty(token))
+                {
+                    user = await db.QueryFirstOrDefaultAsync<User>(
+                        "SELECT user_id as UserId, phone_number as PhoneNumber, full_name as FullName, diet_type as DietType, diet_name as DietName, auth_token as AuthToken FROM Users WHERE auth_token = @Token",
+                        new { Token = token });
+                }
+
+                if (user == null && !string.IsNullOrEmpty(phone))
+                {
+                    user = await db.QueryFirstOrDefaultAsync<User>(
+                        "SELECT user_id as UserId, phone_number as PhoneNumber, full_name as FullName, diet_type as DietType, diet_name as DietName, auth_token as AuthToken FROM Users WHERE phone_number = @Phone",
+                        new { Phone = phone });
+                }
+
+                if (user != null)
+                {
+                    return new
+                    {
+                        valid = true,
+                        success = true,
+                        user = new
+                        {
+                            id = user.UserId,
+                            phone = user.PhoneNumber,
+                            fullName = user.FullName,
+                            dietType = user.DietType,
+                            dietName = user.DietName,
+                            token = user.AuthToken ?? token
+                        }
+                    };
+                }
+
+                return new { valid = false, success = false, message = "Token invalid or expired" };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error in VerifyTokenAsync", ex, "AUTH_VERIFY");
+                return new { valid = false, success = false, message = ex.Message };
+            }
+        }
+
+        public async Task<ApiResponse<bool>> UpdateProfileAsync(string userId, string? fullName, int? dietType)
+        {
+            try
+            {
+                using var db = _connectionFactory.CreateConnection();
+                var dietName = dietType switch
+                {
+                    1 => "Non-Vegetarian",
+                    2 => "Non-Veg + Alcoholic",
+                    _ => "Vegetarian"
+                };
+
+                if (!string.IsNullOrEmpty(fullName) && dietType.HasValue)
+                {
+                    await db.ExecuteAsync(
+                        "UPDATE Users SET full_name = @Name, diet_type = @Diet, diet_name = @DietName, updated_at = GETDATE() WHERE user_id = @UserId",
+                        new { Name = fullName, Diet = dietType.Value, DietName = dietName, UserId = userId });
+                }
+                else if (!string.IsNullOrEmpty(fullName))
+                {
+                    await db.ExecuteAsync(
+                        "UPDATE Users SET full_name = @Name, updated_at = GETDATE() WHERE user_id = @UserId",
+                        new { Name = fullName, UserId = userId });
+                }
+                else if (dietType.HasValue)
+                {
+                    await db.ExecuteAsync(
+                        "UPDATE Users SET diet_type = @Diet, diet_name = @DietName, updated_at = GETDATE() WHERE user_id = @UserId",
+                        new { Diet = dietType.Value, DietName = dietName, UserId = userId });
+                }
+
+                return new ApiResponse<bool> { Success = true, Message = "Profile updated successfully." };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error in UpdateProfileAsync for user {userId}", ex, "USERS");
+                return new ApiResponse<bool> { Success = false, Message = ex.Message };
+            }
+        }
+
+        public async Task<ApiResponse<bool>> ResetPasswordAsync(string phone, string otp, string newPassword)
+        {
+            try
+            {
+                using var db = _connectionFactory.CreateConnection();
+                var otpRecord = await db.QueryFirstOrDefaultAsync<OtpVerification>(
+                    "SELECT otp_id as OtpId FROM OtpVerification WHERE phone_number = @Phone AND otp_code = @Code AND is_verified = 0 AND expires_at > GETDATE()",
+                    new { Phone = phone, Code = otp });
+
+                if (otpRecord == null)
+                {
+                    return new ApiResponse<bool> { Success = false, Message = "Invalid or expired OTP." };
+                }
+
+                await db.ExecuteAsync("UPDATE OtpVerification SET is_verified = 1 WHERE otp_id = @OtpId", new { OtpId = otpRecord.OtpId });
+                await db.ExecuteAsync("UPDATE Users SET password_hash = @Pass, updated_at = GETDATE() WHERE phone_number = @Phone",
+                    new { Pass = newPassword, Phone = phone });
+
+                return new ApiResponse<bool> { Success = true, Message = "Password reset successfully!" };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error in ResetPasswordAsync for phone {phone}", ex, "USERS");
+                return new ApiResponse<bool> { Success = false, Message = ex.Message };
+            }
+        }
+
+        public async Task<bool> ToggleBiometricAsync(string userId, bool enabled)
+        {
+            try
+            {
+                using var db = _connectionFactory.CreateConnection();
+                await db.ExecuteAsync(
+                    "UPDATE Users SET is_biometric_enabled = @Enabled, updated_at = GETDATE() WHERE user_id = @UserId",
+                    new { Enabled = enabled, UserId = userId });
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error in ToggleBiometricAsync for user {userId}", ex, "USERS");
+                return false;
             }
         }
 
