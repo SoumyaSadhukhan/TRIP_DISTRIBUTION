@@ -344,68 +344,72 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
 
                           return Card(
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: _primaryIndigo.withValues(alpha: 0.12),
-                                child: Text(
-                                  friend.name.isNotEmpty ? friend.name[0].toUpperCase() : 'F',
-                                  style: const TextStyle(color: _primaryIndigo, fontWeight: FontWeight.bold),
+                            clipBehavior: Clip.antiAlias,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: _primaryIndigo.withValues(alpha: 0.12),
+                                  child: Text(
+                                    friend.name.isNotEmpty ? friend.name[0].toUpperCase() : 'F',
+                                    style: const TextStyle(color: _primaryIndigo, fontWeight: FontWeight.bold),
+                                  ),
                                 ),
-                              ),
-                              title: Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      friend.name,
-                                      style: const TextStyle(fontWeight: FontWeight.bold),
-                                      overflow: TextOverflow.ellipsis,
+                                title: Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        friend.name,
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: dietColor.withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(6),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: dietColor.withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        friend.dietName,
+                                        style: TextStyle(color: dietColor, fontSize: 10, fontWeight: FontWeight.bold),
+                                      ),
                                     ),
-                                    child: Text(
-                                      friend.dietName,
-                                      style: TextStyle(color: dietColor, fontSize: 10, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              subtitle: Text('📱 ${friend.phone}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                              trailing: IconButton(
-                                icon: Icon(Icons.delete_outline_rounded, color: Colors.grey.shade400, size: 20),
-                                tooltip: 'Remove Friend',
-                                onPressed: () async {
-                                  final confirm = await showDialog<bool>(
-                                    context: context,
-                                    builder: (ctx) => AlertDialog(
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                                      title: const Text('Remove Friend', style: TextStyle(fontWeight: FontWeight.bold)),
-                                      content: Text('Remove ${friend.name} from your trip friends?'),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(ctx, false),
-                                          child: const Text('Cancel'),
-                                        ),
-                                        FilledButton(
-                                          style: FilledButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
-                                          onPressed: () => Navigator.pop(ctx, true),
-                                          child: const Text('Remove'),
-                                        ),
-                                      ],
-                                    ),
-                                  );
+                                  ],
+                                ),
+                                subtitle: Text('📱 ${friend.phone}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                                trailing: IconButton(
+                                  icon: Icon(Icons.delete_outline_rounded, color: Colors.grey.shade400, size: 20),
+                                  tooltip: 'Remove Friend',
+                                  onPressed: () async {
+                                    final confirm = await showDialog<bool>(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                        title: const Text('Remove Friend', style: TextStyle(fontWeight: FontWeight.bold)),
+                                        content: Text('Remove ${friend.name} from your trip friends?'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(ctx, false),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          FilledButton(
+                                            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+                                            onPressed: () => Navigator.pop(ctx, true),
+                                            child: const Text('Remove'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
 
-                                  if (confirm == true && mounted) {
-                                    final auth = context.read<AuthProvider>();
-                                    await auth.apiService.deleteFriend(friend.id, userId: auth.currentUser?.id, token: auth.currentUser?.token);
-                                    _loadData();
-                                  }
-                                },
+                                    if (confirm == true && mounted) {
+                                      final auth = context.read<AuthProvider>();
+                                      await auth.apiService.deleteFriend(friend.id, userId: auth.currentUser?.id, token: auth.currentUser?.token);
+                                      _loadData();
+                                    }
+                                  },
+                                ),
                               ),
                             ),
                           );

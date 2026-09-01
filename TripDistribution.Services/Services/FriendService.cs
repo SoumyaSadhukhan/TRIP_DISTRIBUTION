@@ -61,10 +61,10 @@ namespace TripDistribution.Services.Services
                         fc.connection_id as connectionId,
                         fc.user_id as userId,
                         ISNULL(u.user_id, fc.friend_user_id) as friendUserId,
-                        ISNULL(u.full_name, fc.friend_name) as friendName,
-                        ISNULL(u.phone_number, fc.friend_phone) as friendPhone,
+                        ISNULL(NULLIF(u.full_name, ''), ISNULL(NULLIF(fc.friend_name, ''), 'User')) as friendName,
+                        ISNULL(NULLIF(u.phone_number, ''), fc.friend_phone) as friendPhone,
                         ISNULL(u.diet_type, fc.diet_type) as dietType,
-                        ISNULL(u.diet_name, fc.diet_name) as dietName,
+                        ISNULL(NULLIF(u.diet_name, ''), ISNULL(NULLIF(fc.diet_name, ''), 'Vegetarian')) as dietName,
                         fc.status as status,
                         fc.created_at as createdAt
                     FROM (
@@ -221,33 +221,39 @@ namespace TripDistribution.Services.Services
                 var dietType = friendUser?.DietType ?? request.DietType;
                 var dietName = friendUser?.DietName ?? (dietType == 1 ? "Non-Vegetarian" : "Vegetarian");
 
-                // 4. Check for duplicate existing connection or pending request
-                var existingConn = await db.QueryFirstOrDefaultAsync<dynamic>(
+                // 4. Check for existing connection or pending request
+                var existingConns = (await db.QueryAsync<dynamic>(
                     @"SELECT connection_id as connectionId, status 
                       FROM FriendConnections 
                       WHERE (
-                          (user_id = @UserId AND (friend_user_id = @FriendUserId OR friend_phone LIKE '%' + @Phone + '%'))
-                          OR (friend_user_id = @UserId AND (user_id = @FriendUserId OR friend_phone LIKE '%' + @RequesterPhone + '%'))
-                          OR (requester_id = @UserId AND receiver_id = @FriendUserId)
-                          OR (requester_id = @FriendUserId AND receiver_id = @UserId)
+                          (user_id = @UserId AND (friend_user_id = @FriendUserId OR (@CleanPhone <> '' AND friend_phone LIKE '%' + @CleanPhone + '%')))
+                          OR (friend_user_id = @UserId AND (user_id = @FriendUserId OR (@CleanReqPhone <> '' AND friend_phone LIKE '%' + @CleanReqPhone + '%')))
+                          OR (requester_id = @UserId AND receiver_id = @FriendUserId AND @FriendUserId <> '')
+                          OR (requester_id = @FriendUserId AND receiver_id = @UserId AND @FriendUserId <> '')
                       )",
                     new {
                         UserId = request.UserId,
                         FriendUserId = friendUserId,
-                        Phone = cleanFriendPhone,
-                        RequesterPhone = cleanRequesterPhone
-                    });
+                        CleanPhone = cleanFriendPhone,
+                        CleanReqPhone = cleanRequesterPhone
+                    })).ToList();
 
-                if (existingConn != null)
+                if (existingConns.Any(c => (string)c.status == "ACCEPTED"))
                 {
-                    string status = existingConn.status;
-                    if (status == "ACCEPTED")
+                    return new ApiResponse<dynamic> { Success = false, Message = "You are already friends with this contact." };
+                }
+
+                if (existingConns.Any(c => (string)c.status == "PENDING"))
+                {
+                    return new ApiResponse<dynamic> { Success = false, Message = "A friend request is already pending between you." };
+                }
+
+                // If old declined or canceled rows exist, remove them so fresh request is clean
+                if (existingConns.Count > 0)
+                {
+                    foreach (var old in existingConns)
                     {
-                        return new ApiResponse<dynamic> { Success = false, Message = "You are already friends with this contact." };
-                    }
-                    else if (status == "PENDING")
-                    {
-                        return new ApiResponse<dynamic> { Success = false, Message = "A friend request is already pending between you." };
+                        await db.ExecuteAsync("DELETE FROM FriendConnections WHERE connection_id = @Id", new { Id = (string)old.connectionId });
                     }
                 }
 
@@ -335,10 +341,10 @@ namespace TripDistribution.Services.Services
                         fc.connection_id as id,
                         fc.connection_id as connectionId, 
                         fc.requester_id as requesterId, 
-                        ISNULL(u.full_name, fc.friend_name) as requesterName, 
-                        ISNULL(u.phone_number, fc.friend_phone) as requesterPhone, 
+                        ISNULL(NULLIF(u.full_name, ''), ISNULL(NULLIF(fc.friend_name, ''), 'A member')) as requesterName, 
+                        ISNULL(NULLIF(u.phone_number, ''), fc.friend_phone) as requesterPhone, 
                         ISNULL(u.diet_type, fc.diet_type) as dietType,
-                        ISNULL(u.diet_name, fc.diet_name) as dietName,
+                        ISNULL(NULLIF(u.diet_name, ''), ISNULL(NULLIF(fc.diet_name, ''), 'Vegetarian')) as dietName,
                         fc.status, 
                         fc.created_at as createdAt 
                     FROM FriendConnections fc
@@ -410,10 +416,10 @@ namespace TripDistribution.Services.Services
             {
                 using var db = _connectionFactory.CreateConnection();
                 await db.ExecuteAsync(
-                    "UPDATE FriendConnections SET status = 'DECLINED' WHERE connection_id = @Id",
+                    "DELETE FROM FriendConnections WHERE connection_id = @Id",
                     new { Id = connectionId });
 
-                _logger.LogInfo($"Friend request {connectionId} declined by {userId}", "FRIENDS_DECLINE");
+                _logger.LogInfo($"Friend request {connectionId} declined/removed by {userId}", "FRIENDS_DECLINE");
                 return new ApiResponse<bool> { Success = true, Message = "Friend request declined." };
             }
             catch (Exception ex)
@@ -428,11 +434,40 @@ namespace TripDistribution.Services.Services
             try
             {
                 using var db = _connectionFactory.CreateConnection();
-                await db.ExecuteAsync(
-                    "DELETE FROM FriendConnections WHERE connection_id = @Id OR (user_id = @UserId AND friend_user_id = @Id)",
-                    new { Id = connectionId, UserId = userId });
+                var conn = await db.QueryFirstOrDefaultAsync<dynamic>(
+                    @"SELECT connection_id, user_id, friend_user_id, friend_phone, requester_id, receiver_id 
+                      FROM FriendConnections 
+                      WHERE connection_id = @Id OR user_id = @Id OR friend_user_id = @Id",
+                    new { Id = connectionId });
 
-                _logger.LogInfo($"Friend connection {connectionId} deleted by {userId}", "FRIENDS_DELETE");
+                if (conn != null)
+                {
+                    string u1 = conn.user_id ?? conn.requester_id ?? userId;
+                    string u2 = conn.friend_user_id ?? conn.receiver_id ?? connectionId;
+                    string phone = conn.friend_phone ?? "";
+                    var cleanPhone = new string(phone.Where(char.IsDigit).ToArray());
+                    if (cleanPhone.Length > 10) cleanPhone = cleanPhone.Substring(cleanPhone.Length - 10);
+
+                    await db.ExecuteAsync(@"
+                        DELETE FROM FriendConnections 
+                        WHERE connection_id = @ConnId
+                           OR (user_id = @U1 AND (friend_user_id = @U2 OR (@CleanPhone <> '' AND friend_phone LIKE '%' + @CleanPhone + '%')))
+                           OR (user_id = @U2 AND (friend_user_id = @U1 OR (@CleanPhone <> '' AND friend_phone LIKE '%' + @CleanPhone + '%')))
+                           OR (requester_id = @U1 AND receiver_id = @U2)
+                           OR (requester_id = @U2 AND receiver_id = @U1)",
+                        new { ConnId = (string)conn.connection_id, U1 = u1, U2 = u2, CleanPhone = cleanPhone });
+                }
+                else
+                {
+                    await db.ExecuteAsync(@"
+                        DELETE FROM FriendConnections 
+                        WHERE connection_id = @Id 
+                           OR (user_id = @UserId AND friend_user_id = @Id)
+                           OR (friend_user_id = @UserId AND user_id = @Id)",
+                        new { Id = connectionId, UserId = userId });
+                }
+
+                _logger.LogInfo($"Deleted friend connection {connectionId} for user {userId}", "FRIENDS_DELETE");
                 return new ApiResponse<bool> { Success = true, Message = "Friend removed successfully." };
             }
             catch (Exception ex)
