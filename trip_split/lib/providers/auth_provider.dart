@@ -466,22 +466,6 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Saves updated trips to both local storage and SQL Server database
-  Future<void> saveCurrentUserData(List<Trip> trips) async {
-    if (_currentUser == null) return;
-
-    _currentUser!.trips = List.from(trips);
-    await _storageService.saveCachedUser(_currentUser!);
-
-    // Sync to SQL Server
-    final token = await _storageService.getAuthToken();
-    await _apiService.syncTrips(
-      userId: _currentUser!.id,
-      trips: trips,
-      token: token,
-    );
-  }
-
   /// Logs out user, invalidating DB token and local cache
   Future<void> logout() async {
     final token = await _storageService.getAuthToken();
