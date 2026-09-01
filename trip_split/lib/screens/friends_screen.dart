@@ -229,6 +229,19 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                             final user = auth.currentUser;
                             if (user == null) return;
 
+                            // Prevent self-addition
+                            final cleanPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
+                            final cleanUserPhone = user.phone.replaceAll(RegExp(r'[^0-9]'), '');
+                            if (matchedUserId == user.id || (cleanPhone.isNotEmpty && cleanUserPhone.isNotEmpty && (cleanPhone == cleanUserPhone || cleanUserPhone.endsWith(cleanPhone) || cleanPhone.endsWith(cleanUserPhone)))) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('You cannot add yourself as a friend.'),
+                                  backgroundColor: Color(0xFFEF4444),
+                                ),
+                              );
+                              return;
+                            }
+
                             final res = await auth.apiService.addFriend(
                               userId: user.id,
                               friendPhone: phone,
@@ -240,10 +253,11 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
 
                             if (mounted) {
                               Navigator.pop(dialogCtx);
+                              final bool ok = res['success'] == true;
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text(res['message'] ?? 'Friend request sent!'),
-                                  backgroundColor: const Color(0xFF4F46E5),
+                                  content: Text(res['message'] ?? (ok ? 'Friend request sent!' : 'Failed to send request')),
+                                  backgroundColor: ok ? const Color(0xFF4F46E5) : const Color(0xFFEF4444),
                                 ),
                               );
                               _loadData();
@@ -364,10 +378,33 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                               subtitle: Text('📱 ${friend.phone}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                               trailing: IconButton(
                                 icon: Icon(Icons.delete_outline_rounded, color: Colors.grey.shade400, size: 20),
+                                tooltip: 'Remove Friend',
                                 onPressed: () async {
-                                  final auth = context.read<AuthProvider>();
-                                  await auth.apiService.deleteFriend(friend.id, token: auth.currentUser?.token);
-                                  _loadData();
+                                  final confirm = await showDialog<bool>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                      title: const Text('Remove Friend', style: TextStyle(fontWeight: FontWeight.bold)),
+                                      content: Text('Remove ${friend.name} from your trip friends?'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(ctx, false),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        FilledButton(
+                                          style: FilledButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+                                          onPressed: () => Navigator.pop(ctx, true),
+                                          child: const Text('Remove'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+
+                                  if (confirm == true && mounted) {
+                                    final auth = context.read<AuthProvider>();
+                                    await auth.apiService.deleteFriend(friend.id, userId: auth.currentUser?.id, token: auth.currentUser?.token);
+                                    _loadData();
+                                  }
                                 },
                               ),
                             ),
@@ -384,9 +421,13 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                         separatorBuilder: (_, __) => const SizedBox(height: 10),
                         itemBuilder: (context, index) {
                           final req = _requests[index];
-                          final connectionId = req['id'];
+                          final connectionId = req['id'] ?? req['connectionId'];
                           final requesterName = req['requesterName'] ?? 'A member';
                           final requesterPhone = req['requesterPhone'] ?? '';
+                          final dietType = (req['dietType'] as int?) ?? 0;
+                          final dietNames = ['Vegetarian', 'Non-Vegetarian', 'Non-Veg + Alcohol'];
+                          final dietName = req['dietName'] ?? dietNames[dietType.clamp(0, 2)];
+                          final dietColor = dietType == 1 ? const Color(0xFFEA580C) : (dietType == 2 ? const Color(0xFFDC2626) : const Color(0xFF059669));
 
                           return Card(
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -406,7 +447,29 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(requesterName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                requesterName,
+                                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: dietColor.withValues(alpha: 0.12),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                dietName,
+                                                style: TextStyle(color: dietColor, fontSize: 9, fontWeight: FontWeight.bold),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                         const SizedBox(height: 2),
                                         Text('📱 $requesterPhone', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                                       ],

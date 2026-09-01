@@ -523,13 +523,32 @@ class ApiService {
     }
   }
 
-  Future<bool> deleteFriend(String connectionId, {String? token}) async {
+  Future<http.Response> _smartDelete(String endpoint, [String? token]) async {
+    final urlsToTry = _cachedActiveBaseUrl != null
+        ? [_cachedActiveBaseUrl!, ...candidateUrls.where((u) => u != _cachedActiveBaseUrl)]
+        : candidateUrls;
+
+    Exception? lastError;
+    for (final base in urlsToTry) {
+      try {
+        final response = await http
+            .delete(Uri.parse('$base$endpoint'), headers: _headers(token))
+            .timeout(const Duration(seconds: 3));
+        _cachedActiveBaseUrl = base;
+        return response;
+      } catch (e) {
+        lastError = e is Exception ? e : Exception(e.toString());
+      }
+    }
+    throw lastError ?? Exception('All API hosts unreachable');
+  }
+
+  Future<bool> deleteFriend(String connectionId, {String? userId, String? token}) async {
     try {
-      final response = await http
-          .delete(Uri.parse('$baseUrl/friends/$connectionId'), headers: _headers(token))
-          .timeout(const Duration(seconds: 4));
+      final endpoint = '/friends/$connectionId${userId != null ? '?userId=$userId' : ''}';
+      final response = await _smartDelete(endpoint, token);
       final data = jsonDecode(response.body);
-      return data['success'] == true;
+      return response.statusCode == 200 && data['success'] == true;
     } catch (_) {
       return false;
     }

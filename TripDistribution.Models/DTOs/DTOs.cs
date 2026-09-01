@@ -9,6 +9,7 @@ namespace TripDistribution.Models.DTOs
         public string FullName { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
         public int DietType { get; set; }
+        public string? FriendUserId { get; set; }
         public string OtpCode { get; set; } = string.Empty;
     }
 
@@ -27,6 +28,7 @@ namespace TripDistribution.Models.DTOs
         public string FullName { get; set; } = string.Empty;
         public string PhoneNumber { get; set; } = string.Empty;
         public int DietType { get; set; }
+        public string? FriendUserId { get; set; }
         public string DietName { get; set; } = string.Empty;
     }
 
@@ -63,6 +65,7 @@ namespace TripDistribution.Models.DTOs
         public string Name { get; set; } = string.Empty;
         public string PhoneNumber { get; set; } = string.Empty;
         public int DietType { get; set; }
+        public string? FriendUserId { get; set; }
     }
 
     public class SyncTripsRequestDto
@@ -93,6 +96,7 @@ namespace TripDistribution.Models.DTOs
         public string Name { get; set; } = string.Empty;
         public string PhoneNumber { get; set; } = string.Empty;
         public int DietType { get; set; }
+        public string? FriendUserId { get; set; }
         public string DietName { get; set; } = string.Empty;
         public decimal PaidAmount { get; set; }
         public decimal OwedAmount { get; set; }
@@ -186,6 +190,7 @@ namespace TripDistribution.Models.DTOs
         public string FriendPhone { get; set; } = string.Empty;
         public string FriendName { get; set; } = string.Empty;
         public int DietType { get; set; }
+        public string? FriendUserId { get; set; }
     }
 
     public class ApiResponse<T>

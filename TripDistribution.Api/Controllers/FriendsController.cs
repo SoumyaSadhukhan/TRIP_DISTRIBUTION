@@ -50,8 +50,9 @@ namespace TripDistribution.Api.Controllers
         [HttpPost("add")]
         public async Task<IActionResult> AddFriend([FromBody] AddFriendRequestDto request)
         {
-            var friend = await _friendService.AddFriendAsync(request);
-            return Ok(new { success = true, friend });
+            var result = await _friendService.AddFriendAsync(request);
+            if (!result.Success) return BadRequest(result);
+            return Ok(new { success = true, message = result.Message, friend = result.Data });
         }
 
         [HttpGet("requests")]
@@ -74,6 +75,17 @@ namespace TripDistribution.Api.Controllers
         public async Task<IActionResult> DeclineFriendRequest([FromBody] FriendActionDto request)
         {
             var result = await _friendService.DeclineFriendRequestAsync(request.ConnectionId, request.UserId);
+            if (!result.Success) return BadRequest(result);
+            return Ok(result);
+        }
+
+        [HttpDelete("{connectionId}")]
+        [HttpDelete]
+        public async Task<IActionResult> DeleteFriend(string? connectionId, [FromQuery] string? userId)
+        {
+            var connId = connectionId ?? HttpContext.Request.Query["connectionId"].ToString();
+            var usrId = userId ?? HttpContext.Request.Query["userId"].ToString();
+            var result = await _friendService.DeleteFriendAsync(connId, usrId);
             if (!result.Success) return BadRequest(result);
             return Ok(result);
         }
