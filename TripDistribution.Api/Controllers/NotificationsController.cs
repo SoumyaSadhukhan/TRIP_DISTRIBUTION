@@ -1,6 +1,8 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using TripDistribution.Models.DTOs;
+using TripDistribution.Services.Services;
 
 namespace TripDistribution.Api.Controllers
 {
@@ -8,22 +10,37 @@ namespace TripDistribution.Api.Controllers
     [Route("api/[controller]")]
     public class NotificationsController : ControllerBase
     {
-        [HttpGet]
-        public IActionResult GetNotifications([FromQuery] string? userId)
+        private readonly INotificationService _notificationService;
+
+        public NotificationsController(INotificationService notificationService)
         {
-            return Ok(new { success = true, notifications = new List<object>() });
+            _notificationService = notificationService;
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetNotifications([FromQuery] string? userId)
+        {
+            if (string.IsNullOrEmpty(userId))
+            {
+                return BadRequest(new { success = false, message = "User ID is required." });
+            }
+            var notifications = await _notificationService.GetNotificationsByUserIdAsync(userId);
+            return Ok(new { success = true, notifications });
         }
 
         [HttpGet("unread-count")]
-        public IActionResult GetUnreadCount([FromQuery] string? userId)
+        public async Task<IActionResult> GetUnreadCount([FromQuery] string? userId)
         {
-            return Ok(new { success = true, count = 0 });
+            if (string.IsNullOrEmpty(userId)) return Ok(new { success = true, count = 0 });
+            var count = await _notificationService.GetUnreadCountAsync(userId);
+            return Ok(new { success = true, count });
         }
 
         [HttpPost("mark-read")]
-        public IActionResult MarkRead([FromBody] object? body)
+        public async Task<IActionResult> MarkRead([FromBody] MarkNotificationReadDto request)
         {
-            return Ok(new { success = true, message = "Marked as read." });
+            var success = await _notificationService.MarkReadAsync(request?.NotificationId, request?.UserId);
+            return Ok(new { success, message = success ? "Marked as read." : "Failed to mark as read." });
         }
     }
 }

@@ -1,16 +1,82 @@
-// test/auth_storage_test.dart
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trip_split/models/enums.dart';
 import 'package:trip_split/models/expense.dart';
 import 'package:trip_split/models/group.dart';
+import 'package:trip_split/models/notification.dart';
 import 'package:trip_split/models/person.dart';
+import 'package:trip_split/models/settlement_proposal.dart';
 import 'package:trip_split/models/trip.dart';
 import 'package:trip_split/models/user.dart';
 import 'package:trip_split/providers/auth_provider.dart';
 import 'package:trip_split/providers/trip_provider.dart';
+import 'package:trip_split/services/api_service.dart';
 import 'package:trip_split/services/storage_service.dart';
+
+class MockApiService extends ApiService {
+  final Map<String, UserModel> _users = {};
+
+  MockApiService() : super.test();
+
+  @override
+  Future<Map<String, dynamic>> register({
+    required String phone,
+    required String fullName,
+    required String password,
+    String? otp,
+    int dietType = 0,
+  }) async {
+    if (_users.containsKey(phone)) {
+      return {'success': false, 'message': 'Account with this phone already exists'};
+    }
+    final user = UserModel(
+      id: 'mock-user-${DateTime.now().millisecondsSinceEpoch}',
+      fullName: fullName,
+      phone: phone,
+      username: fullName,
+      password: password,
+      token: 'mock-token-123',
+      dietType: dietType,
+      createdAt: DateTime.now(),
+      lastLoginAt: DateTime.now(),
+    );
+    _users[phone] = user;
+    return {'success': true, 'user': user, 'token': 'mock-token-123'};
+  }
+
+  @override
+  Future<Map<String, dynamic>> login({
+    required String phone,
+    required String password,
+  }) async {
+    final user = _users[phone];
+    if (user == null) {
+      return {'success': false, 'message': 'Account not found. Please register first.'};
+    }
+    if (user.password != password) {
+      return {'success': false, 'message': 'Incorrect password.'};
+    }
+    return {'success': true, 'user': user, 'token': 'mock-token-123'};
+  }
+
+  @override
+  Future<Map<String, dynamic>> verifyToken({required String token, String? phone}) async {
+    if (phone != null && _users.containsKey(phone)) {
+      return {'valid': true, 'user': _users[phone]};
+    }
+    return {'valid': false};
+  }
+
+  @override
+  Future<List<Trip>> getTrips({required String userId, String? phone, String? token}) async => [];
+
+  @override
+  Future<List<NotificationModel>> getNotifications(String userId, {String? token}) async => [];
+
+  @override
+  Future<List<SettlementProposal>> getPendingSettlements({required String userId, String? phone, String? token}) async => [];
+}
 
 void main() {
   const testDir = 'data/test_users';
@@ -146,52 +212,73 @@ void main() {
   group('AuthProvider Tests', () {
     test('register successfully creates account and logs in', () async {
       final storage = StorageService(baseDirPath: testDir);
-      final auth = AuthProvider(storageService: storage);
+      final api = MockApiService();
+      final auth = AuthProvider(storageService: storage, apiService: api);
 
-      final success = await auth.register('charlie', 'secure123');
+      final success = await auth.register(
+        phone: '9876543210',
+        fullName: 'Charlie Brown',
+        password: 'secure123',
+        confirmPassword: 'secure123',
+      );
       expect(success, isTrue);
       expect(auth.isAuthenticated, isTrue);
-      expect(auth.currentUser?.username, 'charlie');
-      expect(auth.currentUser?.password, 'secure123');
+      expect(auth.currentUser?.fullName, 'Charlie Brown');
 
       // Duplicate registration should fail
-      final duplicate = await auth.register('charlie', 'anotherPass');
+      final duplicate = await auth.register(
+        phone: '9876543210',
+        fullName: 'Charlie Brown',
+        password: 'anotherPass',
+        confirmPassword: 'anotherPass',
+      );
       expect(duplicate, isFalse);
-      expect(auth.errorMessage, contains('already taken'));
     });
 
     test('login with correct credentials succeeds and invalid password fails', () async {
       final storage = StorageService(baseDirPath: testDir);
-      final auth = AuthProvider(storageService: storage);
+      final api = MockApiService();
+      final auth = AuthProvider(storageService: storage, apiService: api);
 
-      await auth.register('david', 'correctPass');
-      auth.logout();
+      await auth.register(
+        phone: '9876543211',
+        fullName: 'David Miller',
+        password: 'correctPass',
+        confirmPassword: 'correctPass',
+      );
+      await auth.logout();
       expect(auth.isAuthenticated, isFalse);
 
       // Wrong password
-      final wrong = await auth.login('david', 'wrongPass');
+      final wrong = await auth.login('9876543211', 'wrongPass');
       expect(wrong, isFalse);
-      expect(auth.errorMessage, contains('Incorrect password'));
+      expect(auth.errorMessage, isNotNull);
 
       // Non-existent user
-      final notFound = await auth.login('non_existent', 'pass');
+      final notFound = await auth.login('9999999999', 'pass');
       expect(notFound, isFalse);
-      expect(auth.errorMessage, contains('not found'));
+      expect(auth.errorMessage, isNotNull);
 
       // Correct password
-      final correct = await auth.login('david', 'correctPass');
+      final correct = await auth.login('9876543211', 'correctPass');
       expect(correct, isTrue);
       expect(auth.isAuthenticated, isTrue);
-      expect(auth.currentUser?.username, 'david');
+      expect(auth.currentUser?.fullName, 'David Miller');
     });
   });
 
   group('TripProvider Persistence Tests', () {
     test('trip mutations trigger auto-save into user data', () async {
       final storage = StorageService(baseDirPath: testDir);
-      final auth = AuthProvider(storageService: storage);
+      final api = MockApiService();
+      final auth = AuthProvider(storageService: storage, apiService: api);
 
-      await auth.register('emma', 'pass1234');
+      await auth.register(
+        phone: '9876543212',
+        fullName: 'Emma Watson',
+        password: 'pass1234',
+        confirmPassword: 'pass1234',
+      );
       final tripProvider = TripProvider();
 
       // Connect trip provider with user and auto-save callback

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/trip.dart';
 import '../providers/auth_provider.dart';
 import '../providers/trip_provider.dart';
+import '../widgets/settlement_popup_dialog.dart';
 import 'friends_screen.dart';
 import 'notifications_screen.dart';
 import 'profile_screen.dart';
@@ -20,6 +21,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   Timer? _syncTimer;
   int _unreadNotifs = 0;
+  bool _isSettlementPopupOpen = false;
+  final Set<String> _dismissedSettlementIds = {};
 
   static const List<Color> _cardGradients = [
     Color(0xFF4F46E5),
@@ -64,6 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // Reconnection event detected: transitioned from offline -> online!
       final justReconnected = !wasConnected && isNowConnected;
+      if (!mounted) return;
       final tripProvider = context.read<TripProvider>();
       final hasPendingChanges = tripProvider.hasPendingSync;
 
@@ -119,6 +123,40 @@ class _HomeScreenState extends State<HomeScreen> {
         final unread = notifs.where((n) => !n.isRead).length;
         if (unread != _unreadNotifs) {
           setState(() => _unreadNotifs = unread);
+        }
+      }
+
+      // 4. CHECK PENDING SETTLEMENT PROPOSALS & POPUP
+      final pendingSettlements = await auth.apiService.getPendingSettlements(
+        userId: user.id,
+        phone: user.phone,
+        token: user.token,
+      );
+
+      if (mounted && pendingSettlements.isNotEmpty && !_isSettlementPopupOpen) {
+        // Find proposal where someone else sent a request/payment involving this user
+        final actionableProposals = pendingSettlements.where(
+          (p) => p.createdByUserId != user.id && !_dismissedSettlementIds.contains(p.settlementId),
+        ).toList();
+
+        if (actionableProposals.isNotEmpty) {
+          final topProposal = actionableProposals.first;
+          _isSettlementPopupOpen = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            SettlementPopupDialog.show(
+              context,
+              proposal: topProposal,
+              onActionComplete: () {
+                _isSettlementPopupOpen = false;
+                _dismissedSettlementIds.add(topProposal.settlementId);
+                _checkConnectionAndSync(force: true);
+              },
+            ).then((_) {
+              _isSettlementPopupOpen = false;
+              _dismissedSettlementIds.add(topProposal.settlementId);
+            });
+          });
         }
       }
     } catch (_) {
@@ -695,8 +733,8 @@ class _HomeScreenState extends State<HomeScreen> {
           Container(
             width: 100,
             height: 100,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
                 colors: [Color(0xFFEEF2FF), Color(0xFFE0E7FF)],
               ),
               shape: BoxShape.circle,

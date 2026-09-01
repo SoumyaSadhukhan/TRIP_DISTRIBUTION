@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net;
 using System.Net.Sockets;
 using TripDistribution.Api.Middleware;
@@ -57,6 +57,7 @@ builder.Services.AddScoped<ITripService, TripService>();
 builder.Services.AddScoped<IExpenseService, ExpenseService>();
 builder.Services.AddScoped<IFriendService, FriendService>();
 builder.Services.AddScoped<ISettlementService, SettlementService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 var app = builder.Build();
 

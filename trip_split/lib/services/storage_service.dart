@@ -128,6 +128,27 @@ class StorageService {
     return _prefs?.containsKey(_getPrefKey(clean)) ?? false;
   }
 
+  Future<List<UserModel>> getAllUsers() async {
+    await init();
+    final users = <UserModel>[];
+    if (!kIsWeb) {
+      try {
+        final dir = Directory(baseDirPath);
+        if (await dir.exists()) {
+          final files = dir.listSync().whereType<File>().where((f) => f.path.endsWith('.json'));
+          for (final file in files) {
+            try {
+              final content = await file.readAsString();
+              users.add(UserModel.fromJson(jsonDecode(content)));
+            } catch (_) {}
+          }
+        }
+      } catch (_) {}
+    }
+    return users;
+  }
+
   Future<void> saveUser(UserModel user) => saveCachedUser(user);
   Future<UserModel?> loadUser(String username) => loadCachedUser(username);
 }
+

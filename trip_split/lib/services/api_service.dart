@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/friend.dart';
 import '../models/notification.dart';
+import '../models/settlement_proposal.dart';
 import '../models/trip.dart';
 import '../models/user.dart';
 
@@ -12,6 +13,7 @@ class ApiService {
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
   ApiService._internal();
+  ApiService.test();
 
   String? _cachedActiveBaseUrl;
   static const String _customIpKey = 'custom_server_ip';
@@ -651,6 +653,31 @@ class ApiService {
     }
   }
 
+  Future<List<SettlementProposal>> getPendingSettlements({
+    required String userId,
+    String? phone,
+    String? token,
+  }) async {
+    try {
+      String url = '/trips/pending-settlements?userId=$userId';
+      if (phone != null && phone.isNotEmpty) {
+        url += '&phone=$phone';
+      }
+      final response = await _smartGet(url, token);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['settlements'] != null) {
+          return (data['settlements'] as List)
+              .map((s) => SettlementProposal.fromJson(s))
+              .toList();
+        }
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<bool> acceptSettlementRequest({required String settlementId, required String userId, String? token}) async {
     try {
       final response = await _smartPost(
@@ -668,11 +695,37 @@ class ApiService {
     }
   }
 
-  Future<bool> declineSettlementRequest({required String settlementId, String? token}) async {
+  Future<bool> declineSettlementRequest({required String settlementId, String? userId, String? token}) async {
     try {
       final response = await _smartPost(
         '/trips/settle-decline',
-        {'settlementId': settlementId},
+        {
+          'settlementId': settlementId,
+          if (userId != null) 'userId': userId,
+        },
+        token,
+      );
+      final data = jsonDecode(response.body);
+      return data['success'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> updateSettlementAmount({
+    required String settlementId,
+    required double amount,
+    required String userId,
+    String? token,
+  }) async {
+    try {
+      final response = await _smartPost(
+        '/trips/settle-update',
+        {
+          'settlementId': settlementId,
+          'amount': amount,
+          'userId': userId,
+        },
         token,
       );
       final data = jsonDecode(response.body);

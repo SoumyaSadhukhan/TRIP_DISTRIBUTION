@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace TripDistribution.Models.DTOs
@@ -134,6 +134,50 @@ namespace TripDistribution.Models.DTOs
         public string ToPersonId { get; set; } = string.Empty;
         public decimal Amount { get; set; }
         public string CreatedByUserId { get; set; } = string.Empty;
+    }
+
+    public class UpdateSettlementAmountDto
+    {
+        public string SettlementId { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public string UserId { get; set; } = string.Empty;
+    }
+
+    public class AcceptSettlementDto
+    {
+        public string SettlementId { get; set; } = string.Empty;
+        public string UserId { get; set; } = string.Empty;
+    }
+
+    public class DeclineSettlementDto
+    {
+        public string SettlementId { get; set; } = string.Empty;
+        public string? UserId { get; set; }
+    }
+
+    public class MarkNotificationReadDto
+    {
+        public string? NotificationId { get; set; }
+        public string? UserId { get; set; }
+    }
+
+    public class SettlementProposalDto
+    {
+        public string SettlementId { get; set; } = string.Empty;
+        public string TripId { get; set; } = string.Empty;
+        public string TripName { get; set; } = "Trip";
+        public string FromPersonId { get; set; } = string.Empty;
+        public string FromPersonName { get; set; } = "Member";
+        public string? FromPhone { get; set; }
+        public string ToPersonId { get; set; } = string.Empty;
+        public string ToPersonName { get; set; } = "Member";
+        public string? ToPhone { get; set; }
+        public decimal Amount { get; set; }
+        public string Status { get; set; } = "PENDING";
+        public string? CreatedByUserId { get; set; }
+        public DateTime SettledAt { get; set; } = DateTime.UtcNow;
+        public bool IsPayer { get; set; }
+        public bool IsPayee { get; set; }
     }
 
     public class AddFriendRequestDto

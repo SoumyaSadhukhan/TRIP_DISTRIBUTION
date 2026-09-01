@@ -34,10 +34,21 @@ router.get('/', async (req, res) => {
     }
 
     const pool = await getPool();
+
+    // Ensure settlement_id column exists
+    try {
+      await pool.request().query(`
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Notifications') AND name = 'settlement_id')
+        BEGIN
+          ALTER TABLE Notifications ADD settlement_id NVARCHAR(100);
+        END
+      `);
+    } catch (_) {}
+
     const result = await pool.request()
       .input('userId', sql.NVarChar(100), userId)
       .query(`
-        SELECT TOP 50 notification_id, user_id, trip_id, trip_name, title, message, type, amount, is_read, created_at
+        SELECT TOP 50 notification_id, user_id, trip_id, trip_name, settlement_id, title, message, type, amount, is_read, created_at
         FROM Notifications
         WHERE user_id = @userId
         ORDER BY created_at DESC
@@ -48,6 +59,7 @@ router.get('/', async (req, res) => {
       userId: n.user_id,
       tripId: n.trip_id,
       tripName: n.trip_name,
+      settlementId: n.settlement_id,
       title: n.title,
       message: n.message,
       type: n.type,

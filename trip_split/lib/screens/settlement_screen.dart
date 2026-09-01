@@ -427,68 +427,136 @@ class _TransferCard extends StatelessWidget {
 
   void _showRecordPaymentDialog(BuildContext context, AuthProvider auth) {
     final amountController = TextEditingController(text: amount.toStringAsFixed(2));
+    bool isSending = false;
+
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('Record Settlement Payment', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 4),
-              Text('$fromName ➔ $toName', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-              const SizedBox(height: 16),
-              TextField(
-                controller: amountController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: 'Payment Amount (₹)',
-                  prefixIcon: Icon(Icons.currency_rupee),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF4F46E5), size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Send Settlement Statement',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 20),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF4F46E5),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(fromName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 6),
+                        child: Icon(Icons.arrow_forward_rounded, size: 14, color: Colors.grey),
+                      ),
+                      Text(toName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    ],
+                  ),
                 ),
-                onPressed: () async {
-                  final pAmount = double.tryParse(amountController.text.trim());
-                  if (pAmount != null && pAmount > 0 && auth.currentUser != null) {
-                    final members = trip.allMembers;
-                    final fromPerson = members.firstWhere(
-                      (m) => m.name.trim().toLowerCase() == fromName.trim().toLowerCase(),
-                      orElse: () => null,
-                    );
-                    final toPerson = members.firstWhere(
-                      (m) => m.name.trim().toLowerCase() == toName.trim().toLowerCase(),
-                      orElse: () => null,
-                    );
-                    if (fromPerson != null && toPerson != null) {
-                      final success = await auth.apiService.recordSettlementRequest(
-                        tripId: trip.id,
-                        fromPersonId: fromPerson.id,
-                        toPersonId: toPerson.id,
-                        amount: pAmount,
-                        createdByUserId: auth.currentUser!.id,
-                        token: auth.currentUser!.token,
-                      );
-                      if (context.mounted) Navigator.pop(context);
-                      if (success && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Settlement payment request sent for approval!')),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: amountController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Statement Amount (₹)',
+                    hintText: 'Enter amount to settle',
+                    prefixIcon: Icon(Icons.currency_rupee),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'The recipient will receive an interactive statement notification with options to Pay via UPI or Edit the Amount.',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600, height: 1.3),
+                ),
+                const SizedBox(height: 20),
+                if (isSending)
+                  const Center(child: CircularProgressIndicator())
+                else
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF4F46E5),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.send_rounded, size: 18),
+                    onPressed: () async {
+                      final pAmount = double.tryParse(amountController.text.trim());
+                      if (pAmount != null && pAmount > 0 && auth.currentUser != null) {
+                        setDialogState(() => isSending = true);
+                        final members = trip.allMembers;
+                        final fromPerson = members.firstWhere(
+                          (m) => m.name.trim().toLowerCase() == fromName.trim().toLowerCase(),
+                          orElse: () => null,
                         );
+                        final toPerson = members.firstWhere(
+                          (m) => m.name.trim().toLowerCase() == toName.trim().toLowerCase(),
+                          orElse: () => null,
+                        );
+                        if (fromPerson != null && toPerson != null) {
+                          final success = await auth.apiService.recordSettlementRequest(
+                            tripId: trip.id,
+                            fromPersonId: fromPerson.id,
+                            toPersonId: toPerson.id,
+                            amount: pAmount,
+                            createdByUserId: auth.currentUser!.id,
+                            token: auth.currentUser!.token,
+                          );
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          if (success && context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: const Color(0xFF065F46),
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                content: const Row(
+                                  children: [
+                                    Icon(Icons.mark_email_read_rounded, color: Colors.white),
+                                    SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        'Settlement statement sent! A notification and popup will appear on their device with Pay & Edit options.',
+                                        style: TextStyle(fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+                        } else {
+                          setDialogState(() => isSending = false);
+                        }
                       }
-                    }
-                  }
-                },
-                child: const Text('Send Payment Request'),
-              ),
-            ],
+                    },
+                    label: const Text('Send Settlement Statement', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -601,11 +669,11 @@ class _TransferCard extends StatelessWidget {
             child: InkWell(
               borderRadius: BorderRadius.circular(8),
               onTap: () => _showRecordPaymentDialog(context, auth),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
+                  children: [
                     Icon(Icons.payment_rounded, size: 15, color: Color(0xFF4F46E5)),
                     SizedBox(width: 4),
                     Text(

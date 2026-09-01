@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace TripDistribution.Models.Entities
 {
@@ -109,7 +109,7 @@ namespace TripDistribution.Models.Entities
         public string ToPersonId { get; set; } = string.Empty;
         public decimal Amount { get; set; }
         public bool IsCompleted { get; set; }
-        public string Status { get; set; } = "ACCEPTED";
+        public string Status { get; set; } = "PENDING";
         public string CreatedByUserId { get; set; } = string.Empty;
         public DateTime SettledAt { get; set; } = DateTime.UtcNow;
     }
@@ -135,6 +135,7 @@ namespace TripDistribution.Models.Entities
         public string UserId { get; set; } = string.Empty;
         public string TripId { get; set; } = string.Empty;
         public string TripName { get; set; } = string.Empty;
+        public string? SettlementId { get; set; }
         public string Title { get; set; } = string.Empty;
         public string Message { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
