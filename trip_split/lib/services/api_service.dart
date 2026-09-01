@@ -133,6 +133,24 @@ class ApiService {
     throw lastError ?? Exception('Could not reach server');
   }
 
+  Future<bool> checkLiveConnection() async {
+    final candidateBases = _cachedActiveBaseUrl != null
+        ? [_cachedActiveBaseUrl!, ...candidateUrls.where((u) => u != _cachedActiveBaseUrl)]
+        : candidateUrls;
+
+    for (final base in candidateBases) {
+      try {
+        final res = await http.get(Uri.parse('$base/health')).timeout(const Duration(milliseconds: 1500));
+        if (res.statusCode == 200) {
+          _cachedActiveBaseUrl = base;
+          return true;
+        }
+      } catch (_) {}
+    }
+    _cachedActiveBaseUrl = null;
+    return false;
+  }
+
   Future<bool> testConnection(String ipOrHostAndPort) async {
     try {
       String fullUrl = ipOrHostAndPort.trim();
@@ -147,19 +165,13 @@ class ApiService {
         fullUrl += '/api';
       }
 
-      final res = await http.get(Uri.parse('$fullUrl/health')).timeout(const Duration(seconds: 3));
+      final res = await http.get(Uri.parse('$fullUrl/health')).timeout(const Duration(milliseconds: 1500));
       if (res.statusCode == 200) {
         _cachedActiveBaseUrl = fullUrl;
         return true;
       }
-
-      // Check swagger endpoint for 200 OK response
-      final swaggerRes = await http.get(Uri.parse(fullUrl.replaceAll('/api', '/swagger'))).timeout(const Duration(seconds: 3));
-      if (swaggerRes.statusCode == 200) {
-        _cachedActiveBaseUrl = fullUrl;
-        return true;
-      }
     } catch (_) {}
+    _cachedActiveBaseUrl = null;
     return false;
   }
 

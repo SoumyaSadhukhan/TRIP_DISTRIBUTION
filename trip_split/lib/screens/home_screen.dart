@@ -41,8 +41,8 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     // 1. Initial sync on app start
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkConnectionAndSync(force: true));
-    // 2. Lightweight heartbeat check every 20s (zero DB load, only syncs on reconnection or local edits)
-    _syncTimer = Timer.periodic(const Duration(seconds: 20), (_) => _checkConnectionAndSync());
+    // 2. Responsive heartbeat check every 6s (fast health ping, instantly detects if server is stopped/started)
+    _syncTimer = Timer.periodic(const Duration(seconds: 6), (_) => _checkConnectionAndSync());
   }
 
   @override
@@ -59,7 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final wasConnected = _isApiConnected;
-      final isNowConnected = await auth.apiService.testConnection(auth.apiService.baseUrl);
+      final isNowConnected = await auth.apiService.checkLiveConnection();
 
       if (mounted && _isApiConnected != isNowConnected) {
         setState(() => _isApiConnected = isNowConnected);
@@ -262,7 +262,31 @@ class _HomeScreenState extends State<HomeScreen> {
           style: const TextStyle(fontSize: 13),
         ),
         actions: [
-          TextButton(
+          TextButton.icon(
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('Test Connection Now'),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _checkConnectionAndSync(force: true);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    duration: const Duration(seconds: 2),
+                    backgroundColor: _isApiConnected ? const Color(0xFF065F46) : Colors.amber.shade900,
+                    content: Text(
+                      _isApiConnected ? '🟢 Connected to SQL DB Live' : '🟠 Offline - Using Phone Storage',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                );
+              }
+            },
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF4F46E5),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
             onPressed: () => Navigator.pop(ctx),
             child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
