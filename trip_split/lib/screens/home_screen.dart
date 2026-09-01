@@ -110,7 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
         phone: user.phone,
         token: user.token,
       );
-      if (mounted && remoteTrips.isNotEmpty) {
+      if (mounted) {
         tripProvider.updateFromRemote(remoteTrips);
       }
 

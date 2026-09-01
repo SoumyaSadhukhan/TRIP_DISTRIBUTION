@@ -112,6 +112,7 @@ namespace TripDistribution.Models.DTOs
         public string CategoryName { get; set; } = string.Empty;
         public string PaidByPersonId { get; set; } = string.Empty;
         public List<ExpenseSplitDto> Splits { get; set; } = new();
+        public Dictionary<string, decimal> CustomSplits { get; set; } = new();
     }
 
     public class CreateExpenseRequestDto
@@ -123,6 +124,7 @@ namespace TripDistribution.Models.DTOs
         public string CategoryName { get; set; } = string.Empty;
         public string PaidByPersonId { get; set; } = string.Empty;
         public List<ExpenseSplitDto> Splits { get; set; } = new();
+        public Dictionary<string, decimal> CustomSplits { get; set; } = new();
     }
 
     public class ExpenseSplitDto
