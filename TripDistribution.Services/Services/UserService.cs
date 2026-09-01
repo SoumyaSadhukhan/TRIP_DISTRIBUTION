@@ -164,14 +164,14 @@ namespace TripDistribution.Services.Services
                 if (!string.IsNullOrEmpty(token))
                 {
                     user = await db.QueryFirstOrDefaultAsync<User>(
-                        "SELECT user_id as UserId, phone_number as PhoneNumber, full_name as FullName, diet_type as DietType, diet_name as DietName, auth_token as AuthToken FROM Users WHERE auth_token = @Token",
+                        "SELECT user_id as UserId, phone_number as PhoneNumber, full_name as FullName, diet_type as DietType, diet_name as DietName, auth_token as AuthToken, ISNULL(is_biometric_enabled, 0) as IsBiometricEnabled FROM Users WHERE auth_token = @Token",
                         new { Token = token });
                 }
 
                 if (user == null && !string.IsNullOrEmpty(phone))
                 {
                     user = await db.QueryFirstOrDefaultAsync<User>(
-                        "SELECT user_id as UserId, phone_number as PhoneNumber, full_name as FullName, diet_type as DietType, diet_name as DietName, auth_token as AuthToken FROM Users WHERE phone_number = @Phone",
+                        "SELECT user_id as UserId, phone_number as PhoneNumber, full_name as FullName, diet_type as DietType, diet_name as DietName, auth_token as AuthToken, ISNULL(is_biometric_enabled, 0) as IsBiometricEnabled FROM Users WHERE phone_number = @Phone",
                         new { Phone = phone });
                 }
 
@@ -188,6 +188,7 @@ namespace TripDistribution.Services.Services
                             fullName = user.FullName,
                             dietType = user.DietType,
                             dietName = user.DietName,
+                            isBiometricEnabled = user.IsBiometricEnabled,
                             token = user.AuthToken ?? token
                         }
                     };
@@ -274,6 +275,12 @@ namespace TripDistribution.Services.Services
             try
             {
                 using var db = _connectionFactory.CreateConnection();
+                try
+                {
+                    await db.ExecuteAsync("IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'is_biometric_enabled') ALTER TABLE Users ADD is_biometric_enabled BIT DEFAULT 0;");
+                }
+                catch { }
+
                 await db.ExecuteAsync(
                     "UPDATE Users SET is_biometric_enabled = @Enabled, updated_at = GETDATE() WHERE user_id = @UserId",
                     new { Enabled = enabled, UserId = userId });
