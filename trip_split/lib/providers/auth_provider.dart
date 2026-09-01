@@ -72,35 +72,43 @@ class AuthProvider extends ChangeNotifier {
       if (token != null && token.isNotEmpty) {
         final isBioEnabled = await _storageService.isBiometricEnabled();
 
-        // Verify token with backend database
+        // 1. ALWAYS load local cached user & trips first (Local is Master!)
+        final cachedUser = await _storageService.loadCachedUser(phone);
+        if (cachedUser != null) {
+          _currentUser = cachedUser;
+        }
+
+        // 2. Verify token with backend database if connected
         final verifyResult = await _apiService.verifyToken(token: token, phone: phone);
         if (verifyResult['valid'] == true && verifyResult['user'] != null) {
-          final user = verifyResult['user'] as UserModel;
-          
-          // Load user's trips from SQL Server
-          final trips = await _apiService.getTrips(userId: user.id, token: token);
-          user.trips = trips;
-          
-          _currentUser = user;
-          await _storageService.saveCachedUser(user);
+          final serverUser = verifyResult['user'] as UserModel;
+
+          // Preserve local trips if cached, and push local master state to DB first
+          final localTrips = _currentUser?.trips ?? [];
+          if (localTrips.isNotEmpty) {
+            await _apiService.syncTrips(userId: serverUser.id, trips: localTrips, token: token);
+          }
+
+          // Fetch complete trips from SQL Server
+          final remoteTrips = await _apiService.getTrips(userId: serverUser.id, phone: serverUser.phone, token: token);
+          serverUser.trips = remoteTrips.isNotEmpty ? remoteTrips : localTrips;
+
+          _currentUser = serverUser;
+          await _storageService.saveCachedUser(_currentUser!);
           _isBiometricLocked = isBioEnabled;
           _isCheckingToken = false;
           notifyListeners();
           return true;
-        } else {
-          // Fallback to cached user if offline
-          final cachedUser = await _storageService.loadCachedUser(phone);
-          if (cachedUser != null) {
-            _currentUser = cachedUser;
-            _isBiometricLocked = isBioEnabled;
-            _isCheckingToken = false;
-            notifyListeners();
-            return true;
-          }
+        } else if (_currentUser != null) {
+          // Offline mode with cached data
+          _isBiometricLocked = isBioEnabled;
+          _isCheckingToken = false;
+          notifyListeners();
+          return true;
         }
       }
     } catch (e) {
-      print('Persistent login check error: $e');
+      debugPrint('Persistent login check error: $e');
     }
 
     _isCheckingToken = false;
@@ -338,6 +346,22 @@ class AuthProvider extends ChangeNotifier {
       _errorMessage = 'Session expired. Please log in with your password.';
       notifyListeners();
       return false;
+    }
+  }
+
+  /// Persists current user's trips to local storage immediately and syncs with backend if online
+  Future<void> saveCurrentUserData(List<Trip> trips) async {
+    if (_currentUser == null) return;
+    _currentUser!.trips = List.from(trips);
+    await _storageService.saveCachedUser(_currentUser!);
+
+    // Proactively push local master changes to backend database if online
+    if (_currentUser!.token != null && _currentUser!.token!.isNotEmpty) {
+      _apiService.syncTrips(
+        userId: _currentUser!.id,
+        trips: trips,
+        token: _currentUser!.token,
+      ).catchError((_) => false);
     }
   }
 

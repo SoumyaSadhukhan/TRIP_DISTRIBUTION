@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using System.Threading.Tasks;
 using Dapper;
 using TripDistribution.Models.DTOs;
@@ -11,7 +12,7 @@ namespace TripDistribution.Services.Services
 {
     public interface ITripService
     {
-        Task<IEnumerable<Trip>> GetTripsByUserIdAsync(string userId, string? phone = null);
+        Task<IEnumerable<dynamic>> GetTripsByUserIdAsync(string userId, string? phone = null);
         Task<Trip?> GetTripByIdAsync(string tripId);
         Task<Trip> CreateTripAsync(CreateTripRequestDto request);
         Task<IEnumerable<Person>> GetPersonsByTripIdAsync(string tripId);
@@ -31,25 +32,188 @@ namespace TripDistribution.Services.Services
             _logger = logger;
         }
 
-        public async Task<IEnumerable<Trip>> GetTripsByUserIdAsync(string userId, string? phone = null)
+        public async Task<IEnumerable<dynamic>> GetTripsByUserIdAsync(string userId, string? phone = null)
         {
             try
             {
                 using var db = _connectionFactory.CreateConnection();
-                var sql = @"
-                    SELECT trip_id as TripId, created_by_user_id as UserId, name as Name, description as Description, created_at as CreatedAt, updated_at as UpdatedAt 
-                    FROM Trips 
-                    WHERE created_by_user_id = @UserId 
-                       OR trip_id IN (SELECT trip_id FROM TripMembers WHERE phone_number = @Phone OR phone_number = (SELECT phone_number FROM Users WHERE user_id = @UserId))
-                    ORDER BY created_at DESC";
-                var trips = await db.QueryAsync<Trip>(sql, new { UserId = userId, Phone = phone ?? "" });
-                _logger.LogInfo($"Fetched trips for userId {userId}", "TRIPS");
-                return trips;
+                var cleanPhone = !string.IsNullOrEmpty(phone) ? new string(phone.Where(char.IsDigit).ToArray()) : "";
+                if (cleanPhone.Length > 10) cleanPhone = cleanPhone.Substring(cleanPhone.Length - 10);
+
+                var sqlTrips = @"
+                    SELECT DISTINCT
+                        t.trip_id as id,
+                        t.name as name,
+                        t.description as description,
+                        t.created_by_user_id as createdByUserId,
+                        t.created_at as createdAt,
+                        t.updated_at as updatedAt
+                    FROM Trips t
+                    LEFT JOIN TripMembers tm ON t.trip_id = tm.trip_id
+                    LEFT JOIN Persons p ON t.trip_id = p.trip_id
+                    WHERE t.created_by_user_id = @UserId
+                       OR (@CleanPhone <> '' AND (tm.phone_number LIKE '%' + @CleanPhone + '%' OR p.phone_number LIKE '%' + @CleanPhone + '%'))
+                       OR p.user_id = @UserId
+                    ORDER BY t.created_at DESC";
+
+                var trips = (await db.QueryAsync<dynamic>(sqlTrips, new { UserId = userId ?? "", CleanPhone = cleanPhone })).ToList();
+
+                var result = new List<dynamic>();
+
+                foreach (var t in trips)
+                {
+                    string tripId = t.id;
+
+                    // 1. Fetch Groups
+                    var groups = (await db.QueryAsync<dynamic>(
+                        "SELECT group_id as id, name as name FROM Groups WHERE trip_id = @TripId ORDER BY created_at",
+                        new { TripId = tripId })).ToList();
+
+                    // 2. Fetch Members (from TripMembers & Persons)
+                    var members = (await db.QueryAsync<dynamic>(
+                        @"SELECT 
+                            ISNULL(member_id, person_id) as id, 
+                            group_id as groupId, 
+                            name as name, 
+                            phone_number as phone, 
+                            user_id as userId, 
+                            diet_type as dietType, 
+                            diet_name as dietName,
+                            paid_amount as paidAmount,
+                            owed_amount as owedAmount,
+                            balance as balance
+                          FROM (
+                              SELECT member_id, group_id, name, phone_number, NULL as user_id, diet_type, diet_name, 0.0 as paid_amount, 0.0 as owed_amount, 0.0 as balance, trip_id FROM TripMembers
+                              UNION ALL
+                              SELECT person_id as member_id, group_id, name, phone_number, user_id, diet_type, diet_name, paid_amount, owed_amount, balance, trip_id FROM Persons
+                          ) combined
+                          WHERE trip_id = @TripId",
+                        new { TripId = tripId })).ToList();
+
+                    // Deduplicate members by id
+                    var distinctMembers = members.GroupBy(m => (string)m.id).Select(g => g.First()).ToList();
+
+                    var structuredGroups = new List<dynamic>();
+                    var groupedMemberGroupIds = distinctMembers.Select(m => (string)(m.groupId ?? "")).Distinct().ToList();
+
+                    // Include all explicit groups
+                    foreach (var g in groups)
+                    {
+                        string gId = g.id;
+                        var gMembers = distinctMembers.Where(m => (string)(m.groupId ?? "") == gId).Select(m => new
+                        {
+                            id = m.id,
+                            name = m.name,
+                            dietType = m.dietType != null ? (int)m.dietType : 0,
+                            dietName = m.dietName ?? "Vegetarian",
+                            phone = m.phone,
+                            userId = m.userId,
+                            paidAmount = m.paidAmount != null ? (decimal)m.paidAmount : 0m,
+                            owedAmount = m.owedAmount != null ? (decimal)m.owedAmount : 0m,
+                            balance = m.balance != null ? (decimal)m.balance : 0m,
+                        }).ToList();
+
+                        structuredGroups.Add(new
+                        {
+                            id = g.id,
+                            name = g.name,
+                            members = gMembers
+                        });
+                    }
+
+                    // Also include groups from members that weren't in Groups table
+                    foreach (var gId in groupedMemberGroupIds)
+                    {
+                        if (!string.IsNullOrEmpty(gId) && !structuredGroups.Any(sg => (string)sg.id == gId))
+                        {
+                            var gMembers = distinctMembers.Where(m => (string)(m.groupId ?? "") == gId).Select(m => new
+                            {
+                                id = m.id,
+                                name = m.name,
+                                dietType = m.dietType != null ? (int)m.dietType : 0,
+                                dietName = m.dietName ?? "Vegetarian",
+                                phone = m.phone,
+                                userId = m.userId,
+                                paidAmount = m.paidAmount != null ? (decimal)m.paidAmount : 0m,
+                                owedAmount = m.owedAmount != null ? (decimal)m.owedAmount : 0m,
+                                balance = m.balance != null ? (decimal)m.balance : 0m,
+                            }).ToList();
+
+                            structuredGroups.Add(new
+                            {
+                                id = gId,
+                                name = "Group",
+                                members = gMembers
+                            });
+                        }
+                    }
+
+                    // 3. Fetch Expenses & Splits
+                    var expenses = (await db.QueryAsync<dynamic>(
+                        @"SELECT 
+                            expense_id as id, 
+                            description as description, 
+                            amount as amount, 
+                            category_index as categoryIndex, 
+                            category_name as categoryName, 
+                            paid_by_person_id as paidById, 
+                            created_at as createdAt 
+                          FROM Expenses 
+                          WHERE trip_id = @TripId 
+                          ORDER BY created_at",
+                        new { TripId = tripId })).ToList();
+
+                    var structuredExpenses = new List<dynamic>();
+                    foreach (var exp in expenses)
+                    {
+                        string expId = exp.id;
+                        var splits = (await db.QueryAsync<dynamic>(
+                            "SELECT person_id as personId, amount as amount FROM ExpenseSplits WHERE expense_id = @ExpId",
+                            new { ExpId = expId })).ToList();
+
+                        var splitMap = new Dictionary<string, double>();
+                        var splitAmongIds = new List<string>();
+                        foreach (var s in splits)
+                        {
+                            string pid = s.personId;
+                            double amt = (double)(decimal)s.amount;
+                            splitMap[pid] = amt;
+                            splitAmongIds.Add(pid);
+                        }
+
+                        structuredExpenses.Add(new
+                        {
+                            id = exp.id,
+                            description = exp.description,
+                            amount = (double)(decimal)exp.amount,
+                            categoryIndex = exp.categoryIndex != null ? (int)exp.categoryIndex : 0,
+                            categoryName = exp.categoryName ?? "Other",
+                            paidById = exp.paidById,
+                            createdAt = exp.createdAt != null ? ((DateTime)exp.createdAt).ToString("o") : DateTime.UtcNow.ToString("o"),
+                            splitAmongIds = splitAmongIds,
+                            customSplits = splitMap
+                        });
+                    }
+
+                    result.Add(new
+                    {
+                        id = t.id,
+                        name = t.name,
+                        description = t.description,
+                        createdByUserId = t.createdByUserId,
+                        createdAt = t.createdAt != null ? ((DateTime)t.createdAt).ToString("o") : DateTime.UtcNow.ToString("o"),
+                        groups = structuredGroups,
+                        expenses = structuredExpenses
+                    });
+                }
+
+                _logger.LogInfo($"Fetched {result.Count} complete trips for userId {userId}", "TRIPS");
+                return result;
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error in GetTripsByUserIdAsync for userId {userId}", ex, "TRIPS");
-                return new List<Trip>();
+                return new List<dynamic>();
             }
         }
 
@@ -107,12 +271,12 @@ namespace TripDistribution.Services.Services
             {
                 using var db = _connectionFactory.CreateConnection();
                 return await db.QueryAsync<Person>(
-                    "SELECT member_id as PersonId, group_id as GroupId, trip_id as TripId, phone_number as PhoneNumber, name as Name, diet_type as DietType, diet_name as DietName, 0 as PaidAmount, 0 as OwedAmount, 0 as Balance, created_at as CreatedAt FROM TripMembers WHERE trip_id = @TripId",
+                    "SELECT member_id as PersonId, group_id as GroupId, trip_id as TripId, name as Name, phone_number as PhoneNumber, diet_type as DietType, diet_name as DietName, created_at as CreatedAt FROM TripMembers WHERE trip_id = @TripId",
                     new { TripId = tripId });
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error in GetPersonsByTripIdAsync for tripId {tripId}", ex, "PERSONS");
+                _logger.LogError($"Error in GetPersonsByTripIdAsync for tripId {tripId}", ex, "TRIPS");
                 return new List<Person>();
             }
         }
@@ -144,22 +308,22 @@ namespace TripDistribution.Services.Services
                     DietName = dietName
                 });
 
-                _logger.LogInfo($"Member added to trip {request.TripId}: {request.Name} ({request.PhoneNumber})", "TRIPS_MEMBER");
+                _logger.LogInfo($"Member added to trip {request.TripId}: Name={request.Name}, Group={request.GroupId}", "TRIPS_MEMBER");
 
                 return new Person
                 {
                     PersonId = memberId,
-                    GroupId = request.GroupId,
                     TripId = request.TripId,
-                    PhoneNumber = request.PhoneNumber,
+                    GroupId = request.GroupId,
                     Name = request.Name,
+                    PhoneNumber = request.PhoneNumber,
                     DietType = request.DietType,
                     DietName = dietName
                 };
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error in AddMemberAsync for member {request.Name} in trip {request.TripId}", ex, "TRIPS_MEMBER");
+                _logger.LogError($"Error in AddMemberAsync for trip {request.TripId}", ex, "TRIPS_MEMBER");
                 throw;
             }
         }
@@ -169,35 +333,6 @@ namespace TripDistribution.Services.Services
             try
             {
                 using var db = _connectionFactory.CreateConnection();
-                var trip = await db.QueryFirstOrDefaultAsync<Trip>(
-                    "SELECT trip_id as TripId, created_by_user_id as UserId FROM Trips WHERE trip_id = @TripId",
-                    new { TripId = tripId });
-
-                if (trip == null)
-                {
-                    return new ApiResponse<bool> { Success = false, Message = "Trip not found." };
-                }
-
-                if (!string.IsNullOrEmpty(userId) && trip.UserId != userId)
-                {
-                    _logger.LogWarning($"Unauthorized delete attempt on trip {tripId} by user {userId}", "TRIPS_DELETE");
-                    return new ApiResponse<bool> { Success = false, Message = "Only the trip admin can delete this trip." };
-                }
-
-                var memberCount = await db.ExecuteScalarAsync<int>(
-                    "SELECT COUNT(1) FROM TripMembers WHERE trip_id = @TripId",
-                    new { TripId = tripId });
-
-                if (memberCount > 0)
-                {
-                    _logger.LogWarning($"Trip {tripId} deletion blocked: {memberCount} members present.", "TRIPS_DELETE");
-                    return new ApiResponse<bool>
-                    {
-                        Success = false,
-                        Message = "Cannot delete trip! Members are currently present in this trip. Admin must remove all members before deleting."
-                    };
-                }
-
                 var expenseCount = await db.ExecuteScalarAsync<int>(
                     "SELECT COUNT(1) FROM Expenses WHERE trip_id = @TripId",
                     new { TripId = tripId });
@@ -231,6 +366,7 @@ namespace TripDistribution.Services.Services
             {
                 using var db = _connectionFactory.CreateConnection();
                 int syncedTripsCount = 0;
+                int syncedGroupsCount = 0;
                 int syncedMembersCount = 0;
                 int syncedExpensesCount = 0;
 
@@ -256,9 +392,29 @@ namespace TripDistribution.Services.Services
                             new { TripId = trip.TripId, Name = trip.Name, Desc = trip.Description });
                     }
 
-                    // 2. Upsert TripMembers
+                    // 2. Upsert Groups into Groups Table
                     foreach (var group in trip.Groups)
                     {
+                        var existingGroup = await db.QueryFirstOrDefaultAsync<dynamic>(
+                            "SELECT group_id FROM Groups WHERE group_id = @GroupId",
+                            new { GroupId = group.GroupId });
+
+                        if (existingGroup == null)
+                        {
+                            await db.ExecuteAsync(@"
+                                INSERT INTO Groups (group_id, trip_id, name, created_at)
+                                VALUES (@GroupId, @TripId, @Name, GETDATE())",
+                                new { GroupId = group.GroupId, TripId = trip.TripId, Name = group.Name });
+                            syncedGroupsCount++;
+                        }
+                        else
+                        {
+                            await db.ExecuteAsync(@"
+                                UPDATE Groups SET name = @Name WHERE group_id = @GroupId",
+                                new { GroupId = group.GroupId, Name = group.Name });
+                        }
+
+                        // Upsert Members
                         foreach (var person in group.Members)
                         {
                             var existingMember = await db.QueryFirstOrDefaultAsync<Person>(
@@ -279,6 +435,24 @@ namespace TripDistribution.Services.Services
                                         DietType = person.DietType,
                                         DietName = person.DietName ?? "Vegetarian"
                                     });
+
+                                await db.ExecuteAsync(@"
+                                    IF NOT EXISTS (SELECT 1 FROM Persons WHERE person_id = @PersonId)
+                                    INSERT INTO Persons (person_id, trip_id, group_id, name, phone_number, diet_type, diet_name, paid_amount, owed_amount, balance, created_at)
+                                    VALUES (@PersonId, @TripId, @GroupId, @Name, @Phone, @DietType, @DietName, @Paid, @Owed, @Bal, GETDATE())",
+                                    new {
+                                        PersonId = person.PersonId,
+                                        TripId = trip.TripId,
+                                        GroupId = group.GroupId,
+                                        Name = person.Name,
+                                        Phone = person.PhoneNumber,
+                                        DietType = person.DietType,
+                                        DietName = person.DietName ?? "Vegetarian",
+                                        Paid = person.PaidAmount,
+                                        Owed = person.OwedAmount,
+                                        Bal = person.Balance
+                                    });
+
                                 syncedMembersCount++;
                             }
                             else
@@ -294,6 +468,23 @@ namespace TripDistribution.Services.Services
                                         DietType = person.DietType,
                                         DietName = person.DietName ?? "Vegetarian",
                                         GroupId = group.GroupId
+                                    });
+
+                                await db.ExecuteAsync(@"
+                                    UPDATE Persons
+                                    SET name = @Name, phone_number = @Phone, diet_type = @DietType, diet_name = @DietName, group_id = @GroupId,
+                                        paid_amount = @Paid, owed_amount = @Owed, balance = @Bal
+                                    WHERE person_id = @PersonId",
+                                    new {
+                                        PersonId = person.PersonId,
+                                        Name = person.Name,
+                                        Phone = person.PhoneNumber,
+                                        DietType = person.DietType,
+                                        DietName = person.DietName ?? "Vegetarian",
+                                        GroupId = group.GroupId,
+                                        Paid = person.PaidAmount,
+                                        Owed = person.OwedAmount,
+                                        Bal = person.Balance
                                     });
                             }
                         }
@@ -337,7 +528,7 @@ namespace TripDistribution.Services.Services
                     }
                 }
 
-                _logger.LogInfo($"Offline Sync completed for userId {request.UserId}: Synced {syncedTripsCount} trips, {syncedMembersCount} members, {syncedExpensesCount} expenses to SQL Server DB.", "TRIPS_SYNC");
+                _logger.LogInfo($"Offline Sync completed for userId {request.UserId}: Synced {syncedTripsCount} trips, {syncedGroupsCount} groups, {syncedMembersCount} members, {syncedExpensesCount} expenses to SQL Server DB.", "TRIPS_SYNC");
 
                 return new ApiResponse<bool> { Success = true, Message = "Offline data synced successfully to SQL Server DB." };
             }
