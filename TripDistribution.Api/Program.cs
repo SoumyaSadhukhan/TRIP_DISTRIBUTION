@@ -52,6 +52,7 @@ builder.Services.AddCors(options =>
 // Register Core Services & Logger
 builder.Services.AddSingleton<IFileLoggerService, FileLoggerService>();
 builder.Services.AddSingleton<ISqlDbConnectionFactory, SqlDbConnectionFactory>();
+builder.Services.AddSingleton<IDatabaseInitializer, DatabaseInitializer>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ITripService, TripService>();
 builder.Services.AddScoped<IExpenseService, ExpenseService>();
@@ -60,6 +61,17 @@ builder.Services.AddScoped<ISettlementService, SettlementService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 
 var app = builder.Build();
+
+// Auto-initialize DB schema on startup
+try
+{
+    var dbInit = app.Services.GetRequiredService<IDatabaseInitializer>();
+    await dbInit.InitializeAsync();
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"[DB INIT ERROR] {ex.Message}");
+}
 
 // Enable File Logger Middleware for all API calls
 app.UseMiddleware<RequestLoggingMiddleware>();
