@@ -1,10 +1,10 @@
 -- ==========================================================
 -- Database: SPLIT_BILL_DB
--- Granular Table Schema (Individual units without PK/FK constraints)
--- Connection String: Data Source=localhost;Integrated Security=True;Persist Security Info=False;Pooling=False;MultipleActiveResultSets=False;Encrypt=False;TrustServerCertificate=True;Application Name="SQL Server Management Studio";Command Timeout=0
+-- FINALIZED SCHEMA: Independent Granular Tables (NO Foreign Keys)
+-- Connection String: Data Source=localhost;Integrated Security=True;TrustServerCertificate=True;
 -- ==========================================================
 
--- 1. Create Database if it does not exist
+-- 1. Create Database if not exists
 IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'SPLIT_BILL_DB')
 BEGIN
     CREATE DATABASE [SPLIT_BILL_DB];
@@ -15,291 +15,229 @@ USE [SPLIT_BILL_DB];
 GO
 
 -- ==========================================================
--- UNIT 1: USERS TABLE
--- Stores user core profile, credentials, dietary preferences, and token cache info
+-- STEP 1: CLEAN / WIPE ALL EXISTING TABLES (RESET SCRIPT)
 -- ==========================================================
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Users')
-BEGIN
-    CREATE TABLE Users (
-        user_id NVARCHAR(100),
-        phone_number NVARCHAR(20),
-        full_name NVARCHAR(150),
-        password_hash NVARCHAR(255),
-        auth_token NVARCHAR(500),
-        token_expiry DATETIME,
-        diet_type INT DEFAULT 0, -- 0: vegetarian, 1: nonVegetarian, 2: nonVegAlcoholic
-        diet_name NVARCHAR(50) DEFAULT 'Vegetarian',
-        avatar_color NVARCHAR(20) DEFAULT '#4F46E5',
-        is_biometric_enabled BIT DEFAULT 0,
-        is_active BIT DEFAULT 1,
-        created_at DATETIME DEFAULT GETDATE(),
-        updated_at DATETIME DEFAULT GETDATE(),
-        last_login_at DATETIME
-    );
-END
-ELSE
-BEGIN
-    -- Add columns if missing in existing table
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'diet_type')
-        ALTER TABLE Users ADD diet_type INT DEFAULT 0;
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'diet_name')
-        ALTER TABLE Users ADD diet_name NVARCHAR(50) DEFAULT 'Vegetarian';
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'avatar_color')
-        ALTER TABLE Users ADD avatar_color NVARCHAR(20) DEFAULT '#4F46E5';
-END
+IF OBJECT_ID('dbo.ActivityLogs', 'U') IS NOT NULL DROP TABLE dbo.ActivityLogs;
+IF OBJECT_ID('dbo.Notifications', 'U') IS NOT NULL DROP TABLE dbo.Notifications;
+IF OBJECT_ID('dbo.TripCollaborators', 'U') IS NOT NULL DROP TABLE dbo.TripCollaborators;
+IF OBJECT_ID('dbo.FriendConnections', 'U') IS NOT NULL DROP TABLE dbo.FriendConnections;
+IF OBJECT_ID('dbo.SettlementTransactions', 'U') IS NOT NULL DROP TABLE dbo.SettlementTransactions;
+IF OBJECT_ID('dbo.ExpenseSplits', 'U') IS NOT NULL DROP TABLE dbo.ExpenseSplits;
+IF OBJECT_ID('dbo.Expenses', 'U') IS NOT NULL DROP TABLE dbo.Expenses;
+IF OBJECT_ID('dbo.Persons', 'U') IS NOT NULL DROP TABLE dbo.Persons;
+IF OBJECT_ID('dbo.Groups', 'U') IS NOT NULL DROP TABLE dbo.Groups;
+IF OBJECT_ID('dbo.Trips', 'U') IS NOT NULL DROP TABLE dbo.Trips;
+IF OBJECT_ID('dbo.OtpVerification', 'U') IS NOT NULL DROP TABLE dbo.OtpVerification;
+IF OBJECT_ID('dbo.UserTokens', 'U') IS NOT NULL DROP TABLE dbo.UserTokens;
+IF OBJECT_ID('dbo.Users', 'U') IS NOT NULL DROP TABLE dbo.Users;
 GO
 
 -- ==========================================================
--- UNIT 2: USER TOKENS / SESSIONS TABLE
--- Stores persistent login tokens for auto-login & multi-device sessions
+-- STEP 2: CREATE ALL TABLES (STANDALONE / NO FOREIGN KEYS)
 -- ==========================================================
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'UserTokens')
-BEGIN
-    CREATE TABLE UserTokens (
-        token_id NVARCHAR(100),
-        user_id NVARCHAR(100),
-        phone_number NVARCHAR(20),
-        auth_token NVARCHAR(500),
-        device_info NVARCHAR(255),
-        is_active BIT DEFAULT 1,
-        expires_at DATETIME,
-        created_at DATETIME DEFAULT GETDATE(),
-        last_used_at DATETIME DEFAULT GETDATE()
-    );
-END
+
+-- 1. USERS TABLE
+CREATE TABLE Users (
+    user_id NVARCHAR(100) NOT NULL PRIMARY KEY,
+    phone_number NVARCHAR(20) NOT NULL,
+    full_name NVARCHAR(150) NULL,
+    password_hash NVARCHAR(255) NULL,
+    auth_token NVARCHAR(500) NULL,
+    token_expiry DATETIME NULL,
+    diet_type INT DEFAULT 0, -- 0: veg, 1: non-veg, 2: non-veg + alc
+    diet_name NVARCHAR(50) DEFAULT 'Vegetarian',
+    avatar_color NVARCHAR(20) DEFAULT '#4F46E5',
+    is_biometric_enabled BIT DEFAULT 0,
+    is_active BIT DEFAULT 1,
+    created_at DATETIME DEFAULT GETDATE(),
+    updated_at DATETIME DEFAULT GETDATE(),
+    last_login_at DATETIME NULL
+);
+CREATE INDEX IX_Users_Phone ON Users(phone_number);
 GO
 
--- ==========================================================
--- UNIT 3: OTP VERIFICATION TABLE
--- Stores OTP codes for phone registration & password reset
--- ==========================================================
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'OtpVerification')
-BEGIN
-    CREATE TABLE OtpVerification (
-        otp_id NVARCHAR(100),
-        phone_number NVARCHAR(20),
-        otp_code NVARCHAR(10),
-        purpose NVARCHAR(50), -- 'REGISTER', 'FORGOT_PASSWORD', 'LOGIN'
-        is_verified BIT DEFAULT 0,
-        expires_at DATETIME,
-        created_at DATETIME DEFAULT GETDATE()
-    );
-END
+-- 2. USER TOKENS / SESSIONS TABLE
+CREATE TABLE UserTokens (
+    token_id NVARCHAR(100) NOT NULL PRIMARY KEY,
+    user_id NVARCHAR(100) NOT NULL,
+    phone_number NVARCHAR(20) NULL,
+    auth_token NVARCHAR(500) NOT NULL,
+    device_info NVARCHAR(255) NULL,
+    is_active BIT DEFAULT 1,
+    expires_at DATETIME NULL,
+    created_at DATETIME DEFAULT GETDATE(),
+    last_used_at DATETIME DEFAULT GETDATE()
+);
+CREATE INDEX IX_UserTokens_AuthToken ON UserTokens(auth_token);
+CREATE INDEX IX_UserTokens_UserId ON UserTokens(user_id);
 GO
 
--- ==========================================================
--- UNIT 4: TRIPS TABLE
--- Stores trip header information
--- ==========================================================
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Trips')
-BEGIN
-    CREATE TABLE Trips (
-        trip_id NVARCHAR(100),
-        user_id NVARCHAR(100),
-        name NVARCHAR(200),
-        description NVARCHAR(MAX),
-        created_at DATETIME DEFAULT GETDATE(),
-        updated_at DATETIME DEFAULT GETDATE()
-    );
-END
+-- 3. OTP VERIFICATION TABLE
+CREATE TABLE OtpVerification (
+    otp_id NVARCHAR(100) NOT NULL PRIMARY KEY,
+    phone_number NVARCHAR(20) NOT NULL,
+    otp_code NVARCHAR(10) NOT NULL,
+    purpose NVARCHAR(50) DEFAULT 'REGISTER', -- 'REGISTER', 'FORGOT_PASSWORD', 'LOGIN'
+    is_verified BIT DEFAULT 0,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME DEFAULT GETDATE()
+);
+CREATE INDEX IX_Otp_Phone_Purpose ON OtpVerification(phone_number, purpose);
 GO
 
--- ==========================================================
--- UNIT 5: GROUPS TABLE
--- Stores groups / teams within a trip
--- ==========================================================
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Groups')
-BEGIN
-    CREATE TABLE Groups (
-        group_id NVARCHAR(100),
-        trip_id NVARCHAR(100),
-        name NVARCHAR(200),
-        created_at DATETIME DEFAULT GETDATE()
-    );
-END
+-- 4. TRIPS TABLE
+CREATE TABLE Trips (
+    trip_id NVARCHAR(100) NOT NULL PRIMARY KEY,
+    user_id NVARCHAR(100) NOT NULL,
+    name NVARCHAR(200) NOT NULL,
+    description NVARCHAR(MAX) NULL,
+    currency_code NVARCHAR(10) DEFAULT 'INR',
+    created_at DATETIME DEFAULT GETDATE(),
+    updated_at DATETIME DEFAULT GETDATE()
+);
+CREATE INDEX IX_Trips_UserId ON Trips(user_id);
 GO
 
--- ==========================================================
--- UNIT 6: PERSONS / MEMBERS TABLE
--- Stores individual participants, dietary types, and balance states
--- ==========================================================
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Persons')
-BEGIN
-    CREATE TABLE Persons (
-        person_id NVARCHAR(100),
-        group_id NVARCHAR(100),
-        trip_id NVARCHAR(100),
-        user_id NVARCHAR(100), -- Linked user account if registered
-        phone_number NVARCHAR(20),
-        name NVARCHAR(150),
-        diet_type INT, -- 0: vegetarian, 1: nonVegetarian, 2: nonVegAlcoholic
-        diet_name NVARCHAR(50),
-        paid_amount DECIMAL(18, 2) DEFAULT 0.00,
-        owed_amount DECIMAL(18, 2) DEFAULT 0.00,
-        balance DECIMAL(18, 2) DEFAULT 0.00,
-        created_at DATETIME DEFAULT GETDATE()
-    );
-END
-ELSE
-BEGIN
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Persons') AND name = 'user_id')
-        ALTER TABLE Persons ADD user_id NVARCHAR(100);
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Persons') AND name = 'phone_number')
-        ALTER TABLE Persons ADD phone_number NVARCHAR(20);
-END
+-- 5. GROUPS TABLE
+CREATE TABLE Groups (
+    group_id NVARCHAR(100) NOT NULL PRIMARY KEY,
+    trip_id NVARCHAR(100) NOT NULL,
+    name NVARCHAR(200) NOT NULL,
+    created_at DATETIME DEFAULT GETDATE()
+);
+CREATE INDEX IX_Groups_TripId ON Groups(trip_id);
 GO
 
--- ==========================================================
--- UNIT 7: EXPENSES TABLE
--- Stores expense records for a trip
--- ==========================================================
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Expenses')
-BEGIN
-    CREATE TABLE Expenses (
-        expense_id NVARCHAR(100),
-        trip_id NVARCHAR(100),
-        description NVARCHAR(500),
-        amount DECIMAL(18, 2),
-        category_index INT,
-        category_name NVARCHAR(100),
-        paid_by_person_id NVARCHAR(100),
-        expense_date DATETIME,
-        created_at DATETIME DEFAULT GETDATE()
-    );
-END
+-- 6. PERSONS / MEMBERS TABLE
+CREATE TABLE Persons (
+    person_id NVARCHAR(100) NOT NULL PRIMARY KEY,
+    group_id NVARCHAR(100) NULL,
+    trip_id NVARCHAR(100) NOT NULL,
+    user_id NVARCHAR(100) NULL,
+    phone_number NVARCHAR(20) NULL,
+    name NVARCHAR(150) NOT NULL,
+    diet_type INT DEFAULT 0,
+    diet_name NVARCHAR(50) DEFAULT 'Vegetarian',
+    paid_amount DECIMAL(18, 2) DEFAULT 0.00,
+    owed_amount DECIMAL(18, 2) DEFAULT 0.00,
+    balance DECIMAL(18, 2) DEFAULT 0.00,
+    created_at DATETIME DEFAULT GETDATE()
+);
+CREATE INDEX IX_Persons_TripId ON Persons(trip_id);
+CREATE INDEX IX_Persons_UserId ON Persons(user_id);
+CREATE INDEX IX_Persons_Phone ON Persons(phone_number);
 GO
 
--- ==========================================================
--- UNIT 8: EXPENSE SPLITS TABLE
--- Stores granular breakdown of who owes what for each expense
--- ==========================================================
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'ExpenseSplits')
-BEGIN
-    CREATE TABLE ExpenseSplits (
-        split_id NVARCHAR(100),
-        expense_id NVARCHAR(100),
-        trip_id NVARCHAR(100),
-        person_id NVARCHAR(100),
-        amount DECIMAL(18, 2),
-        created_at DATETIME DEFAULT GETDATE()
-    );
-END
+-- 7. EXPENSES TABLE
+CREATE TABLE Expenses (
+    expense_id NVARCHAR(100) NOT NULL PRIMARY KEY,
+    trip_id NVARCHAR(100) NOT NULL,
+    description NVARCHAR(500) NOT NULL,
+    amount DECIMAL(18, 2) NOT NULL,
+    currency_code NVARCHAR(10) DEFAULT 'INR',
+    category_index INT DEFAULT 0,
+    category_name NVARCHAR(100) DEFAULT 'General',
+    paid_by_person_id NVARCHAR(100) NOT NULL,
+    split_type NVARCHAR(50) DEFAULT 'EQUAL', -- 'EQUAL', 'EXACT', 'DIETARY'
+    expense_date DATETIME NOT NULL,
+    created_at DATETIME DEFAULT GETDATE()
+);
+CREATE INDEX IX_Expenses_TripId ON Expenses(trip_id);
+CREATE INDEX IX_Expenses_PaidBy ON Expenses(paid_by_person_id);
 GO
 
--- ==========================================================
--- UNIT 9: SETTLEMENT TRANSACTIONS TABLE
--- Stores calculated or completed debt settlements between members
--- ==========================================================
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'SettlementTransactions')
-BEGIN
-    CREATE TABLE SettlementTransactions (
-        settlement_id NVARCHAR(100),
-        trip_id NVARCHAR(100),
-        from_person_id NVARCHAR(100),
-        to_person_id NVARCHAR(100),
-        amount DECIMAL(18, 2),
-        is_completed BIT DEFAULT 0,
-        status NVARCHAR(50) DEFAULT 'ACCEPTED', -- 'PENDING', 'ACCEPTED', 'DECLINED'
-        created_by_user_id NVARCHAR(100),
-        settled_at DATETIME DEFAULT GETDATE()
-    );
-END
-ELSE
-BEGIN
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('SettlementTransactions') AND name = 'status')
-        ALTER TABLE SettlementTransactions ADD status NVARCHAR(50) DEFAULT 'ACCEPTED';
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('SettlementTransactions') AND name = 'created_by_user_id')
-        ALTER TABLE SettlementTransactions ADD created_by_user_id NVARCHAR(100);
-END
+-- 8. EXPENSE SPLITS TABLE
+CREATE TABLE ExpenseSplits (
+    split_id NVARCHAR(100) NOT NULL PRIMARY KEY,
+    expense_id NVARCHAR(100) NOT NULL,
+    trip_id NVARCHAR(100) NOT NULL,
+    person_id NVARCHAR(100) NOT NULL,
+    amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00,
+    created_at DATETIME DEFAULT GETDATE()
+);
+CREATE INDEX IX_ExpenseSplits_ExpenseId ON ExpenseSplits(expense_id);
+CREATE INDEX IX_ExpenseSplits_TripId ON ExpenseSplits(trip_id);
+CREATE INDEX IX_ExpenseSplits_PersonId ON ExpenseSplits(person_id);
 GO
 
--- ==========================================================
--- UNIT 10: ACTIVITY LOGS / AUDIT TABLE
--- Stores event activity audit log for auditing operations
--- ==========================================================
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'ActivityLogs')
-BEGIN
-    CREATE TABLE ActivityLogs (
-        log_id NVARCHAR(100),
-        user_id NVARCHAR(100),
-        trip_id NVARCHAR(100),
-        action_type NVARCHAR(100),
-        details NVARCHAR(MAX),
-        created_at DATETIME DEFAULT GETDATE()
-    );
-END
+-- 9. SETTLEMENT TRANSACTIONS TABLE
+CREATE TABLE SettlementTransactions (
+    settlement_id NVARCHAR(100) NOT NULL PRIMARY KEY,
+    trip_id NVARCHAR(100) NOT NULL,
+    from_person_id NVARCHAR(100) NOT NULL,
+    to_person_id NVARCHAR(100) NOT NULL,
+    amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00,
+    is_completed BIT DEFAULT 0,
+    status NVARCHAR(50) DEFAULT 'ACCEPTED', -- 'PENDING', 'ACCEPTED', 'DECLINED'
+    created_by_user_id NVARCHAR(100) NULL,
+    settled_at DATETIME DEFAULT GETDATE()
+);
+CREATE INDEX IX_Settlements_TripId ON SettlementTransactions(trip_id);
+CREATE INDEX IX_Settlements_Status ON SettlementTransactions(status);
 GO
 
--- ==========================================================
--- UNIT 11: FRIEND CONNECTIONS TABLE
--- Stores trip friends connected by phone number
--- ==========================================================
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'FriendConnections')
-BEGIN
-    CREATE TABLE FriendConnections (
-        connection_id NVARCHAR(100),
-        user_id NVARCHAR(100), -- Requester user_id
-        friend_user_id NVARCHAR(100), -- Receiver user_id
-        friend_phone NVARCHAR(20),
-        friend_name NVARCHAR(150),
-        diet_type INT DEFAULT 0,
-        diet_name NVARCHAR(50) DEFAULT 'Vegetarian',
-        status NVARCHAR(50) DEFAULT 'ACCEPTED', -- 'PENDING', 'ACCEPTED', 'REJECTED'
-        requester_id NVARCHAR(100),
-        receiver_id NVARCHAR(100),
-        created_at DATETIME DEFAULT GETDATE()
-    );
-END
-ELSE
-BEGIN
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('FriendConnections') AND name = 'requester_id')
-        ALTER TABLE FriendConnections ADD requester_id NVARCHAR(100);
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('FriendConnections') AND name = 'receiver_id')
-        ALTER TABLE FriendConnections ADD receiver_id NVARCHAR(100);
-END
+-- 10. FRIEND CONNECTIONS TABLE
+CREATE TABLE FriendConnections (
+    connection_id NVARCHAR(100) NOT NULL PRIMARY KEY,
+    user_id NVARCHAR(100) NOT NULL,
+    friend_user_id NVARCHAR(100) NULL,
+    friend_phone NVARCHAR(20) NOT NULL,
+    friend_name NVARCHAR(150) NOT NULL,
+    diet_type INT DEFAULT 0,
+    diet_name NVARCHAR(50) DEFAULT 'Vegetarian',
+    status NVARCHAR(50) DEFAULT 'ACCEPTED', -- 'PENDING', 'ACCEPTED', 'REJECTED'
+    requester_id NVARCHAR(100) NULL,
+    receiver_id NVARCHAR(100) NULL,
+    created_at DATETIME DEFAULT GETDATE()
+);
+CREATE INDEX IX_Friends_UserId ON FriendConnections(user_id);
+CREATE INDEX IX_Friends_Phone ON FriendConnections(friend_phone);
+CREATE INDEX IX_Friends_FriendUserId ON FriendConnections(friend_user_id);
 GO
 
--- ==========================================================
--- UNIT 12: TRIP COLLABORATORS / SHARED TRIPS TABLE
--- Links registered users and phone numbers to collaborative trips
--- ==========================================================
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'TripCollaborators')
-BEGIN
-    CREATE TABLE TripCollaborators (
-        collab_id NVARCHAR(100),
-        trip_id NVARCHAR(100),
-        user_id NVARCHAR(100),
-        person_id NVARCHAR(100),
-        phone_number NVARCHAR(20),
-        role NVARCHAR(50) DEFAULT 'MEMBER', -- 'OWNER', 'MEMBER', 'VIEWER'
-        status NVARCHAR(50) DEFAULT 'ACCEPTED', -- 'PENDING', 'ACCEPTED'
-        joined_at DATETIME DEFAULT GETDATE()
-    );
-END
-ELSE
-BEGIN
-    IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('TripCollaborators') AND name = 'status')
-        ALTER TABLE TripCollaborators ADD status NVARCHAR(50) DEFAULT 'ACCEPTED';
-END
+-- 11. TRIP COLLABORATORS TABLE
+CREATE TABLE TripCollaborators (
+    collab_id NVARCHAR(100) NOT NULL PRIMARY KEY,
+    trip_id NVARCHAR(100) NOT NULL,
+    user_id NVARCHAR(100) NULL,
+    person_id NVARCHAR(100) NULL,
+    phone_number NVARCHAR(20) NULL,
+    role NVARCHAR(50) DEFAULT 'MEMBER', -- 'OWNER', 'MEMBER', 'VIEWER'
+    status NVARCHAR(50) DEFAULT 'ACCEPTED', -- 'PENDING', 'ACCEPTED'
+    joined_at DATETIME DEFAULT GETDATE()
+);
+CREATE INDEX IX_Collaborators_TripId ON TripCollaborators(trip_id);
+CREATE INDEX IX_Collaborators_UserId ON TripCollaborators(user_id);
+CREATE INDEX IX_Collaborators_Phone ON TripCollaborators(phone_number);
 GO
 
--- ==========================================================
--- UNIT 13: NOTIFICATIONS TABLE
--- Real-time notification feed for trip expenses, splits, and debt alerts
--- ==========================================================
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Notifications')
-BEGIN
-    CREATE TABLE Notifications (
-        notification_id NVARCHAR(100),
-        user_id NVARCHAR(100),
-        trip_id NVARCHAR(100),
-        trip_name NVARCHAR(200),
-        title NVARCHAR(200),
-        message NVARCHAR(MAX),
-        type NVARCHAR(50), -- 'EXPENSE_ADDED', 'EXPENSE_UPDATED', 'DEBT_ALERT', 'SETTLEMENT'
-        amount DECIMAL(18, 2) DEFAULT 0.00,
-        is_read BIT DEFAULT 0,
-        created_at DATETIME DEFAULT GETDATE()
-    );
-END
+-- 12. NOTIFICATIONS TABLE
+CREATE TABLE Notifications (
+    notification_id NVARCHAR(100) NOT NULL PRIMARY KEY,
+    user_id NVARCHAR(100) NOT NULL,
+    trip_id NVARCHAR(100) NULL,
+    trip_name NVARCHAR(200) NULL,
+    title NVARCHAR(200) NOT NULL,
+    message NVARCHAR(MAX) NOT NULL,
+    type NVARCHAR(50) NOT NULL, -- 'EXPENSE_ADDED', 'EXPENSE_UPDATED', 'DEBT_ALERT', 'SETTLEMENT', 'COLLAB_INVITE'
+    amount DECIMAL(18, 2) DEFAULT 0.00,
+    is_read BIT DEFAULT 0,
+    created_at DATETIME DEFAULT GETDATE()
+);
+CREATE INDEX IX_Notifications_UserId ON Notifications(user_id, is_read);
 GO
+
+-- 13. ACTIVITY LOGS TABLE
+CREATE TABLE ActivityLogs (
+    log_id NVARCHAR(100) NOT NULL PRIMARY KEY,
+    user_id NVARCHAR(100) NULL,
+    trip_id NVARCHAR(100) NULL,
+    action_type NVARCHAR(100) NOT NULL,
+    details NVARCHAR(MAX) NULL,
+    created_at DATETIME DEFAULT GETDATE()
+);
+CREATE INDEX IX_ActivityLogs_TripId ON ActivityLogs(trip_id);
+CREATE INDEX IX_ActivityLogs_UserId ON ActivityLogs(user_id);
+GO
+
+PRINT '>>> SPLIT_BILL_DB: ALL 13 TABLES AND INDEXES RE-CREATED SUCCESSFULLY WITHOUT FOREIGN KEYS! <<<';
