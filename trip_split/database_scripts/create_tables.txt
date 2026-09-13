@@ -42,7 +42,7 @@ CREATE TABLE Users (
     phone_number NVARCHAR(20) NOT NULL,
     full_name NVARCHAR(150) NULL,
     password_hash NVARCHAR(255) NULL,
-    auth_token NVARCHAR(500) NULL,
+    auth_token NVARCHAR(MAX) NULL,
     token_expiry DATETIME NULL,
     diet_type INT DEFAULT 0, -- 0: veg, 1: non-veg, 2: non-veg + alc
     diet_name NVARCHAR(50) DEFAULT 'Vegetarian',
@@ -61,14 +61,14 @@ CREATE TABLE UserTokens (
     token_id NVARCHAR(100) NOT NULL PRIMARY KEY,
     user_id NVARCHAR(100) NOT NULL,
     phone_number NVARCHAR(20) NULL,
-    auth_token NVARCHAR(500) NOT NULL,
+    auth_token NVARCHAR(MAX) NOT NULL,
     device_info NVARCHAR(255) NULL,
     is_active BIT DEFAULT 1,
     expires_at DATETIME NULL,
     created_at DATETIME DEFAULT GETDATE(),
     last_used_at DATETIME DEFAULT GETDATE()
 );
-CREATE INDEX IX_UserTokens_AuthToken ON UserTokens(auth_token);
+
 CREATE INDEX IX_UserTokens_UserId ON UserTokens(user_id);
 GO
 

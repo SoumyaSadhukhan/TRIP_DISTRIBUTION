@@ -20,14 +20,14 @@ class ApiService {
 
   List<String> get candidateUrls {
     if (kIsWeb) {
-      return ['http://localhost:7266/api', 'http://127.0.0.1:7266/api'];
+      return ['http://localhost:5262/api', 'http://127.0.0.1:5262/api'];
     }
     return [
-      'http://10.130.176.248:7266/api', // Laptop Wi-Fi IP
-      'http://192.168.1.111:7266/api',  // Alternative LAN IP
-      'http://127.0.0.1:7266/api',      // USB / adb reverse
-      'http://localhost:7266/api',      // Localhost
-      'http://10.0.2.2:7266/api',       // Android Emulator loopback
+      'http://10.130.176.248:5262/api', // Laptop Wi-Fi IP
+      'http://192.168.1.111:5262/api',  // Alternative LAN IP
+      'http://127.0.0.1:5262/api',      // USB / adb reverse
+      'http://localhost:5262/api',      // Localhost
+      'http://10.0.2.2:5262/api',       // Android Emulator loopback
     ];
   }
 
@@ -39,7 +39,7 @@ class ApiService {
 
     if (input.isNotEmpty) {
       if (!input.contains(':')) {
-        input = '$input:5246'; // Default fallback port
+        input = '$input:5262'; // Default fallback port
       }
       _cachedActiveBaseUrl = 'http://$input/api';
       final prefs = await SharedPreferences.getInstance();
@@ -66,7 +66,7 @@ class ApiService {
     if (_cachedActiveBaseUrl == null) {
       final savedIp = await getCustomServerIp();
       if (savedIp != null && savedIp.isNotEmpty) {
-        final clean = savedIp.contains(':') ? savedIp : '$savedIp:5246';
+        final clean = savedIp.contains(':') ? savedIp : '$savedIp:5262';
         _cachedActiveBaseUrl = 'http://$clean/api';
       }
     }
@@ -92,6 +92,42 @@ class ApiService {
         return response;
       } catch (e) {
         debugPrint('[API ERR] POST $base$endpoint => $e');
+        lastError = e is Exception ? e : Exception(e.toString());
+      }
+    }
+    throw lastError ?? Exception('Could not reach any server URL');
+  }
+
+  Future<http.Response> _smartPut(String endpoint, Map<String, dynamic> body, [String? token]) async {
+    if (_cachedActiveBaseUrl == null) {
+      final savedIp = await getCustomServerIp();
+      if (savedIp != null && savedIp.isNotEmpty) {
+        final clean = savedIp.contains(':') ? savedIp : '$savedIp:5262';
+        _cachedActiveBaseUrl = 'http://$clean/api';
+      }
+    }
+
+    final urlsToTry = _cachedActiveBaseUrl != null
+        ? [_cachedActiveBaseUrl!, ...candidateUrls.where((u) => u != _cachedActiveBaseUrl)]
+        : candidateUrls;
+
+    Exception? lastError;
+    for (final base in urlsToTry) {
+      try {
+        debugPrint('[API] PUT $base$endpoint');
+        final response = await http
+            .put(
+              Uri.parse('$base$endpoint'),
+              headers: _headers(token),
+              body: jsonEncode(body),
+            )
+            .timeout(const Duration(seconds: 3));
+
+        debugPrint('[API] PUT $base$endpoint => Status ${response.statusCode}');
+        _cachedActiveBaseUrl = base;
+        return response;
+      } catch (e) {
+        debugPrint('[API ERR] PUT $base$endpoint => $e');
         lastError = e is Exception ? e : Exception(e.toString());
       }
     }
@@ -159,7 +195,7 @@ class ApiService {
       }
       final cleanHost = fullUrl.replaceAll('http://', '').replaceAll('https://', '');
       if (!cleanHost.contains(':')) {
-        fullUrl += ':5246';
+        fullUrl += ':5262';
       }
       if (!fullUrl.endsWith('/api')) {
         fullUrl += '/api';
@@ -184,12 +220,13 @@ class ApiService {
     try {
       final response = await _smartPost(
         '/auth/send-otp',
-        {'phoneNumber': phone, 'purpose': purpose},
+        {'phone': phone, 'purpose': purpose},
       );
 
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
-        final code = data['otpCode'] ?? data['otp'];
+        final responseData = data['data'] ?? data;
+        final code = responseData['otpCode'] ?? responseData['otp'];
         return {
           'success': true,
           'message': data['message'] ?? 'OTP sent to $phone',
@@ -213,7 +250,7 @@ class ApiService {
     try {
       final response = await _smartPost(
         '/auth/verify-otp',
-        {'phoneNumber': phone, 'otpCode': otp, 'purpose': purpose},
+        {'phone': phone, 'otpCode': otp, 'purpose': purpose},
       );
 
       final data = jsonDecode(response.body);
@@ -240,7 +277,7 @@ class ApiService {
       final response = await _smartPost(
         '/auth/register',
         {
-          'phoneNumber': phone,
+          'phone': phone,
           'fullName': fullName,
           'password': password,
           'otpCode': otp ?? '',
@@ -250,12 +287,13 @@ class ApiService {
 
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
+        final responseData = data['data'] ?? data;
         final user = UserModel(
-          id: data['userId'] ?? data['user']?['id'] ?? 'usr_${DateTime.now().millisecondsSinceEpoch}',
-          phone: data['phoneNumber'] ?? data['user']?['phone'] ?? phone,
-          fullName: data['fullName'] ?? data['user']?['fullName'] ?? fullName,
-          dietType: (data['dietType'] as int? ?? dietType),
-          token: data['token'] ?? 'token_${DateTime.now().millisecondsSinceEpoch}',
+          id: responseData['userId'] ?? responseData['user']?['id'] ?? 'usr_${DateTime.now().millisecondsSinceEpoch}',
+          phone: responseData['phone'] ?? responseData['phoneNumber'] ?? responseData['user']?['phone'] ?? phone,
+          fullName: responseData['fullName'] ?? responseData['user']?['fullName'] ?? fullName,
+          dietType: (responseData['dietType'] as int? ?? dietType),
+          token: responseData['token'] ?? 'token_${DateTime.now().millisecondsSinceEpoch}',
           createdAt: DateTime.now(),
           lastLoginAt: DateTime.now(),
         );
@@ -277,21 +315,22 @@ class ApiService {
     try {
       final response = await _smartPost(
         '/auth/login',
-        {'phoneNumber': phone, 'password': password},
+        {'phone': phone, 'password': password},
       );
 
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
+        final responseData = data['data'] ?? data;
         final user = UserModel(
-          id: data['userId'] ?? data['user']?['id'] ?? 'usr_${DateTime.now().millisecondsSinceEpoch}',
-          phone: data['phoneNumber'] ?? data['user']?['phone'] ?? phone,
-          fullName: data['fullName'] ?? data['user']?['fullName'] ?? 'User',
-          dietType: (data['dietType'] as int? ?? 0),
-          token: data['token'],
+          id: responseData['userId'] ?? responseData['user']?['id'] ?? 'usr_${DateTime.now().millisecondsSinceEpoch}',
+          phone: responseData['phone'] ?? responseData['phoneNumber'] ?? responseData['user']?['phone'] ?? phone,
+          fullName: responseData['fullName'] ?? responseData['user']?['fullName'] ?? 'User',
+          dietType: (responseData['dietType'] as int? ?? 0),
+          token: responseData['token'],
           createdAt: DateTime.now(),
           lastLoginAt: DateTime.now(),
         );
-        return {'success': true, 'user': user, 'token': data['token']};
+        return {'success': true, 'user': user, 'token': responseData['token']};
       }
       return {'success': false, 'message': data['message'] ?? 'Invalid phone number or password.'};
     } catch (e) {
@@ -340,16 +379,33 @@ class ApiService {
     String? token,
   }) async {
     try {
-      final response = await _smartPost(
-        '/auth/profile',
-        {
-          'userId': userId,
-          if (fullName != null) 'fullName': fullName,
-          if (dietType != null) 'dietType': dietType,
-        },
-        token,
-      );
-      return jsonDecode(response.body);
+      bool profileSuccess = true;
+      bool dietSuccess = true;
+
+      if (fullName != null) {
+        final response = await _smartPut(
+          '/auth/profile',
+          {'fullName': fullName, 'isBiometricEnabled': null, 'avatarColor': null},
+          token,
+        );
+        final data = jsonDecode(response.body);
+        if (response.statusCode != 200 || data['success'] != true) profileSuccess = false;
+      }
+
+      if (dietType != null) {
+        final response = await _smartPut(
+          '/auth/diet',
+          {'dietType': dietType, 'dietName': null},
+          token,
+        );
+        final data = jsonDecode(response.body);
+        if (response.statusCode != 200 || data['success'] != true) dietSuccess = false;
+      }
+
+      if (profileSuccess && dietSuccess) {
+        return {'success': true, 'message': 'Profile updated successfully.'};
+      }
+      return {'success': false, 'message': 'Failed to fully update profile.'};
     } catch (e) {
       return {'success': false, 'message': e.toString()};
     }
@@ -365,7 +421,7 @@ class ApiService {
         '/auth/reset-password',
         {
           'phone': phone,
-          'otp': otp,
+          'otpCode': otp,
           'newPassword': newPassword,
         },
       );
@@ -382,13 +438,13 @@ class ApiService {
 
   Future<bool> toggleBiometric({required String userId, required bool enabled, String? token}) async {
     try {
-      final response = await _smartPost(
-        '/auth/toggle-biometric',
-        {'userId': userId, 'enabled': enabled},
+      final response = await _smartPut(
+        '/auth/profile',
+        {'isBiometricEnabled': enabled, 'fullName': null, 'avatarColor': null},
         token,
       );
       final data = jsonDecode(response.body);
-      return data['success'] == true;
+      return response.statusCode == 200 && data['success'] == true;
     } catch (_) {
       return false;
     }
@@ -459,7 +515,7 @@ class ApiService {
   }) async {
     try {
       final response = await _smartPost(
-        '/friends/add',
+        '/Friends',
         {
           'userId': userId,
           'friendPhone': friendPhone,
@@ -496,10 +552,10 @@ class ApiService {
     String? token,
   }) async {
     try {
-      final response = await _smartPost(
-        '/friends/accept',
-        {'connectionId': connectionId, 'userId': userId},
-        token,
+      final response = await http.put(
+        Uri.parse('$baseUrl/Friends/$connectionId/status'),
+        headers: _headers(token),
+        body: jsonEncode('ACCEPTED'),
       );
       return jsonDecode(response.body);
     } catch (e) {
@@ -512,10 +568,10 @@ class ApiService {
     String? token,
   }) async {
     try {
-      final response = await _smartPost(
-        '/friends/decline',
-        {'connectionId': connectionId},
-        token,
+      final response = await http.put(
+        Uri.parse('$baseUrl/Friends/$connectionId/status'),
+        headers: _headers(token),
+        body: jsonEncode('REJECTED'),
       );
       return jsonDecode(response.body);
     } catch (e) {
@@ -640,16 +696,23 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> createTrip({required String userId, required Trip trip, String? token}) async {
+    try {
+      final response = await _smartPost('/api/Trips', {
+        'tripId': trip.id,
+        'name': trip.name,
+        'description': trip.description,
+        'currencyCode': 'INR'
+      }, token);
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
   Future<bool> deleteTrip(String tripId, {String? token, String? userId}) async {
     try {
-      final response = await _smartPost(
-        '/trips/delete',
-        {
-          'tripId': tripId,
-          if (userId != null) 'userId': userId,
-        },
-        token,
-      );
+      final response = await _smartDelete('/Trips/$tripId', token);
       final data = jsonDecode(response.body);
       return response.statusCode == 200 && data['success'] == true;
     } catch (e) {
@@ -667,7 +730,7 @@ class ApiService {
   }) async {
     try {
       final response = await _smartPost(
-        '/trips/settle-request',
+        '/Settlements',
         {
           'tripId': tripId,
           'fromPersonId': fromPersonId,
@@ -711,13 +774,10 @@ class ApiService {
 
   Future<bool> acceptSettlementRequest({required String settlementId, required String userId, String? token}) async {
     try {
-      final response = await _smartPost(
-        '/trips/settle-accept',
-        {
-          'settlementId': settlementId,
-          'userId': userId,
-        },
-        token,
+      final response = await http.put(
+        Uri.parse('$baseUrl/Settlements/$settlementId/status'),
+        headers: _headers(token),
+        body: jsonEncode('ACCEPTED'),
       );
       final data = jsonDecode(response.body);
       return data['success'] == true;
@@ -728,13 +788,10 @@ class ApiService {
 
   Future<bool> declineSettlementRequest({required String settlementId, String? userId, String? token}) async {
     try {
-      final response = await _smartPost(
-        '/trips/settle-decline',
-        {
-          'settlementId': settlementId,
-          if (userId != null) 'userId': userId,
-        },
-        token,
+      final response = await http.put(
+        Uri.parse('$baseUrl/Settlements/$settlementId/status'),
+        headers: _headers(token),
+        body: jsonEncode('DECLINED'),
       );
       final data = jsonDecode(response.body);
       return data['success'] == true;
@@ -750,14 +807,10 @@ class ApiService {
     String? token,
   }) async {
     try {
-      final response = await _smartPost(
-        '/trips/settle-update',
-        {
-          'settlementId': settlementId,
-          'amount': amount,
-          'userId': userId,
-        },
-        token,
+      final response = await http.put(
+        Uri.parse('$baseUrl/Settlements/$settlementId'),
+        headers: _headers(token),
+        body: jsonEncode({'amount': amount}), // Assuming API takes amount in body or as param
       );
       final data = jsonDecode(response.body);
       return data['success'] == true;
@@ -772,3 +825,6 @@ class ApiService {
     } catch (_) {}
   }
 }
+
+
+
