@@ -21,7 +21,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   static const Color _primaryIndigo = Color(0xFF4F46E5);
   static const Color _emerald = Color(0xFF059669);
-  static const Color _amber = Color(0xFFD97706);
 
   @override
   void initState() {

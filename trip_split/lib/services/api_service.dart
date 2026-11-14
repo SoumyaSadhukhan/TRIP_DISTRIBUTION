@@ -529,6 +529,31 @@ class ApiService {
     }
   }
 
+  /// POST /api/Auth/change-password
+  Future<Map<String, dynamic>> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    String? token,
+  }) async {
+    try {
+      final response = await _smartPost(
+        '/Auth/change-password',
+        {
+          'currentPassword': currentPassword,
+          'newPassword': newPassword,
+        },
+        token,
+      );
+      final data = jsonDecode(response.body);
+      return {
+        'success': response.statusCode == 200 && (data['success'] == true || data['success'] == null),
+        'message': data['message'] ?? (response.statusCode == 200 ? 'Password changed successfully.' : 'Failed to change password.'),
+      };
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
   // =========================================================================
   // 2. TRIPS CONTROLLER (APIs 12-17)
   // =========================================================================
@@ -1059,6 +1084,26 @@ class ApiService {
   Future<bool> declineSettlementRequest({required String settlementId, String? userId, String? token}) async {
     final res = await updateSettlementStatus(settlementId: settlementId, status: 'REJECTED', token: token);
     return res['success'] == true;
+  }
+
+  /// API 37: PUT /api/Settlements/{id}
+  Future<bool> updateSettlementAmount({
+    required String settlementId,
+    required double amount,
+    String? userId,
+    String? token,
+  }) async {
+    try {
+      final response = await _smartPut(
+        '/Settlements/$settlementId',
+        {'amount': amount},
+        token,
+      );
+      final data = jsonDecode(response.body);
+      return (response.statusCode == 200 || response.statusCode == 204) && (data['success'] == true || data['success'] == null);
+    } catch (_) {
+      return false;
+    }
   }
 
   /// API 38: DELETE /api/Settlements/{id}

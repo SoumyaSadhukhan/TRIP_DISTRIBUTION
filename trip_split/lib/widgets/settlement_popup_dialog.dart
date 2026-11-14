@@ -51,7 +51,6 @@ class _SettlementPopupDialogState extends State<SettlementPopupDialog> {
   static const Color _indigo = Color(0xFF4F46E5);
   static const Color _violet = Color(0xFF7C3AED);
   static const Color _emerald = Color(0xFF059669);
-  static const Color _amber = Color(0xFFD97706);
 
   @override
   void initState() {
