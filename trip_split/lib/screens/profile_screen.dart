@@ -68,6 +68,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  void _showChangePasswordDialog() {
+    final currentPwController = TextEditingController();
+    final newPwController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Change Password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: currentPwController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Current Password', prefixIcon: Icon(Icons.lock_outline)),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: newPwController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'New Password', prefixIcon: Icon(Icons.lock_reset)),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () async {
+              final auth = context.read<AuthProvider>();
+              final token = auth.currentUser?.token;
+              if (token != null && currentPwController.text.isNotEmpty && newPwController.text.isNotEmpty) {
+                final res = await auth.apiService.changePassword(
+                  currentPassword: currentPwController.text,
+                  newPassword: newPwController.text,
+                  token: token,
+                );
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(res['message'] ?? (res['success'] == true ? 'Password changed successfully!' : 'Password change failed')),
+                      backgroundColor: res['success'] == true ? const Color(0xFF059669) : Colors.redAccent,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Change'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -213,6 +266,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onChanged: (val) => auth.toggleBiometric(val),
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Change Password Tile
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: ListTile(
+                leading: const Icon(Icons.lock_reset_rounded, color: _primaryIndigo),
+                title: const Text('Change Account Password', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: const Text('Update your security password on server', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                onTap: _showChangePasswordDialog,
               ),
             ),
             const SizedBox(height: 30),

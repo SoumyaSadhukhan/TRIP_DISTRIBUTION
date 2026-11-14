@@ -35,16 +35,75 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (user == null) return;
 
     setState(() => _isLoading = true);
-    final notifs = await auth.apiService.getNotifications(user.id, token: user.token);
+    final notifs = await auth.apiService.getNotifications(userId: user.id, token: user.token);
 
     if (mounted) {
       setState(() {
         _notifications = notifs;
         _isLoading = false;
       });
-      // Mark as read
-      await auth.apiService.markNotificationsRead(userId: user.id, token: user.token);
     }
+  }
+
+  Future<void> _markAllRead() async {
+    final auth = context.read<AuthProvider>();
+    final user = auth.currentUser;
+    if (user == null) return;
+    await auth.apiService.markNotificationsRead(userId: user.id, token: user.token);
+    _fetchNotifications();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All notifications marked as read.')),
+      );
+    }
+  }
+
+  void _showSendNotificationDialog() {
+    final toUserIdController = TextEditingController();
+    final messageController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Send Alert Notification'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: toUserIdController,
+              decoration: const InputDecoration(labelText: 'Recipient User ID', hintText: 'Enter recipient user ID'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: messageController,
+              decoration: const InputDecoration(labelText: 'Message', hintText: 'e.g. Please review the trip settlement'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () async {
+              final auth = context.read<AuthProvider>();
+              final user = auth.currentUser;
+              if (user != null && toUserIdController.text.isNotEmpty && messageController.text.isNotEmpty) {
+                await auth.apiService.sendNotification(
+                  toUserId: toUserIdController.text.trim(),
+                  message: messageController.text.trim(),
+                  token: user.token,
+                );
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Notification sent successfully!')),
+                  );
+                }
+              }
+            },
+            child: const Text('Send'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _openSettlementDetails(NotificationModel item) async {
@@ -114,6 +173,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         backgroundColor: const Color(0xFF1E1B4B),
         actions: [
           IconButton(
+            tooltip: 'Send alert notification',
+            icon: const Icon(Icons.add_alert_rounded),
+            onPressed: _showSendNotificationDialog,
+          ),
+          IconButton(
+            tooltip: 'Mark all as read',
+            icon: const Icon(Icons.done_all_rounded),
+            onPressed: _markAllRead,
+          ),
+          IconButton(
+            tooltip: 'Refresh',
             icon: const Icon(Icons.refresh_rounded),
             onPressed: _fetchNotifications,
           ),

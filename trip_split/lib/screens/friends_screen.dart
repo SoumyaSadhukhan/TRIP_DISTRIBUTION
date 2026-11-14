@@ -38,8 +38,8 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     if (user == null) return;
 
     setState(() => _isLoading = true);
-    final friends = await auth.apiService.getFriends(user.id, token: user.token);
-    final requests = await auth.apiService.getFriendRequests(user.id, token: user.token);
+    final friends = await auth.apiService.getFriends(userId: user.id, token: user.token);
+    final requests = await auth.apiService.getFriendRequests(userId: user.id, token: user.token);
     if (mounted) {
       setState(() {
         _friends = friends;

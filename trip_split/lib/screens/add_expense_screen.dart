@@ -57,6 +57,64 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     super.dispose();
   }
 
+  Future<void> _previewServerDietarySplit(Trip trip) async {
+    final amount = double.tryParse(_amountController.text);
+    if (amount == null || amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid amount first to preview split')),
+      );
+      return;
+    }
+    final auth = context.read<AuthProvider>();
+    final token = auth.currentUser?.token;
+    final res = await auth.apiService.calculateDietarySplit(
+      tripId: trip.id,
+      totalAmount: amount,
+      categoryIndex: _selectedCategory.index,
+      personIds: _selectedParticipants.isNotEmpty ? _selectedParticipants : null,
+      token: token,
+    );
+    if (!mounted) return;
+    if (res['success'] == true && res['splits'] != null) {
+      showModalBottomSheet(
+        context: context,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        builder: (ctx) => Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.calculate_rounded, color: Color(0xFF4F46E5)),
+                  SizedBox(width: 8),
+                  Text('Server Dietary Split Breakdown', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text('Calculated by backend API for ${_selectedCategory.label} (${_selectedParticipants.length} members)', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+              const Divider(height: 24),
+              if (res['splits'] is List)
+                ...((res['splits'] as List).map((s) => ListTile(
+                  dense: true,
+                  leading: const CircleAvatar(radius: 14, backgroundColor: Color(0xFFEEF2FF), child: Icon(Icons.person, size: 16, color: Color(0xFF4F46E5))),
+                  title: Text(s['personName'] ?? s['name'] ?? 'Member', style: const TextStyle(fontWeight: FontWeight.w600)),
+                  trailing: Text('₹${(s['amount'] ?? s['splitAmount'] ?? 0.0).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                )))
+              else
+                Text(res['splits'].toString()),
+            ],
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res['message'] ?? 'Failed to calculate server split')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<TripProvider>(
@@ -180,7 +238,17 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                    icon: const Icon(Icons.auto_graph_rounded, size: 16),
+                    label: const Text('Preview Server Split', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    onPressed: () => _previewServerDietarySplit(trip),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 Text(
                   'Paid By',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),

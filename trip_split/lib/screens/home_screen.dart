@@ -116,7 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // 3. FETCH live notification count
       final notifs = await auth.apiService.getNotifications(
-        user.id,
+        userId: user.id,
         token: user.token,
       );
       if (mounted) {

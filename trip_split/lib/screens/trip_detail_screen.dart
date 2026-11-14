@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:trip_split/screens/add_expense_screen.dart';
+import '../models/activity_log.dart';
+import '../models/collaborator.dart';
 import '../models/enums.dart';
 import '../models/group.dart';
 import '../models/person.dart';
@@ -63,6 +65,45 @@ class _TripDetailScreenState extends State<TripDetailScreen>
     } catch (_) {}
   }
 
+  Future<void> _recalculateTrip(BuildContext context, Trip trip) async {
+    final auth = context.read<AuthProvider>();
+    final user = auth.currentUser;
+    if (user == null) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Recalculating balances on server...'), duration: Duration(seconds: 1)),
+    );
+
+    final res = await auth.apiService.recalculateTrip(trip.id, token: user.token);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res['message'] ?? 'Trip balances recalculated successfully!'),
+          backgroundColor: const Color(0xFF059669),
+        ),
+      );
+      _syncTripData();
+    }
+  }
+
+  void _showCollaboratorsDialog(BuildContext context, Trip trip) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CollaboratorsBottomSheet(tripId: trip.id),
+    );
+  }
+
+  void _showActivityLogsDialog(BuildContext context, Trip trip) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ActivityLogsBottomSheet(tripId: trip.id),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<TripProvider>(
@@ -99,6 +140,42 @@ class _TripDetailScreenState extends State<TripDetailScreen>
                     onPressed: () => Navigator.pop(context),
                   ),
                   actions: [
+                    IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.group_add_rounded, color: Colors.white, size: 20),
+                      ),
+                      onPressed: () => _showCollaboratorsDialog(context, trip),
+                      tooltip: 'Trip Collaborators',
+                    ),
+                    IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.history_rounded, color: Colors.white, size: 20),
+                      ),
+                      onPressed: () => _showActivityLogsDialog(context, trip),
+                      tooltip: 'Activity Logs',
+                    ),
+                    IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.sync_rounded, color: Colors.white, size: 20),
+                      ),
+                      onPressed: () => _recalculateTrip(context, trip),
+                      tooltip: 'Recalculate Balances',
+                    ),
                     IconButton(
                       icon: Container(
                         padding: const EdgeInsets.all(8),
@@ -975,7 +1052,7 @@ class _PickFromFriendsWidgetState extends State<_PickFromFriendsWidget> {
     if (user == null) return;
 
     setState(() => _loading = true);
-    final friends = await auth.apiService.getFriends(user.id, token: user.token);
+    final friends = await auth.apiService.getFriends(userId: user.id, token: user.token);
     if (mounted) {
       setState(() {
         _friends = friends.map((f) => f.toJson()).toList();
@@ -1456,6 +1533,328 @@ class _EmptyTabState extends StatelessWidget {
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF1F2937))),
           const SizedBox(height: 6),
           Text(subtitle, style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13)),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Collaborators Bottom Sheet ──────────────────────────────────────────────
+
+class _CollaboratorsBottomSheet extends StatefulWidget {
+  final String tripId;
+
+  const _CollaboratorsBottomSheet({required this.tripId});
+
+  @override
+  State<_CollaboratorsBottomSheet> createState() => _CollaboratorsBottomSheetState();
+}
+
+class _CollaboratorsBottomSheetState extends State<_CollaboratorsBottomSheet> {
+  List<CollaboratorModel> _collabs = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCollaborators();
+  }
+
+  Future<void> _loadCollaborators() async {
+    final auth = context.read<AuthProvider>();
+    final user = auth.currentUser;
+    if (user == null) return;
+
+    setState(() => _loading = true);
+    final collabs = await auth.apiService.getCollaborators(widget.tripId, token: user.token);
+    if (mounted) {
+      setState(() {
+        _collabs = collabs;
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _inviteCollaborator() async {
+    final auth = context.read<AuthProvider>();
+    final user = auth.currentUser;
+    if (user == null) return;
+
+    final phoneController = TextEditingController();
+    String selectedRole = 'MEMBER';
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Invite Collaborator'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: phoneController,
+                decoration: const InputDecoration(
+                  labelText: 'Phone Number or User ID',
+                  hintText: 'e.g. 9876543210',
+                  prefixIcon: Icon(Icons.phone_rounded),
+                ),
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: selectedRole,
+                decoration: const InputDecoration(labelText: 'Role'),
+                items: const [
+                  DropdownMenuItem(value: 'MEMBER', child: Text('Member (Can add/edit)')),
+                  DropdownMenuItem(value: 'VIEWER', child: Text('Viewer (Read only)')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setDialogState(() => selectedRole = val);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () async {
+                final target = phoneController.text.trim();
+                if (target.isEmpty) return;
+                Navigator.pop(ctx);
+                final res = await auth.apiService.inviteCollaborator(
+                  tripId: widget.tripId,
+                  phoneNumber: target,
+                  role: selectedRole,
+                  token: user.token,
+                );
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(res['message'] ?? 'Collaborator invited!'),
+                      backgroundColor: res['success'] == true ? const Color(0xFF059669) : Colors.red,
+                    ),
+                  );
+                  _loadCollaborators();
+                }
+              },
+              child: const Text('Invite'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _changeRole(CollaboratorModel c, String newRole) async {
+    final auth = context.read<AuthProvider>();
+    final user = auth.currentUser;
+    if (user == null) return;
+
+    final res = await auth.apiService.updateCollaboratorRole(
+      collabId: c.collabId,
+      role: newRole,
+      token: user.token,
+    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res['message'] ?? 'Role updated')),
+      );
+      _loadCollaborators();
+    }
+  }
+
+  Future<void> _removeCollaborator(CollaboratorModel c) async {
+    final auth = context.read<AuthProvider>();
+    final user = auth.currentUser;
+    if (user == null) return;
+
+    final ok = await auth.apiService.removeCollaborator(c.collabId, token: user.token);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ok ? 'Collaborator removed' : 'Failed to remove collaborator')),
+      );
+      _loadCollaborators();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Trip Collaborators', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (_loading)
+            const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()))
+          else if (_collabs.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text('No external collaborators yet.', style: TextStyle(color: Colors.grey.shade600)),
+              ),
+            )
+          else
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: _collabs.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (ctx, i) {
+                  final c = _collabs[i];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: CircleAvatar(
+                      backgroundColor: const Color(0xFF4F46E5).withOpacity(0.12),
+                      child: Text(
+                        (c.fullName ?? c.phoneNumber ?? 'U')[0].toUpperCase(),
+                        style: const TextStyle(color: Color(0xFF4F46E5), fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    title: Text(c.fullName ?? c.phoneNumber ?? 'Collaborator', style: const TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: Text('Role: ${c.role} | Status: ${c.status}', style: const TextStyle(fontSize: 12)),
+                    trailing: PopupMenuButton<String>(
+                      onSelected: (action) {
+                        if (action == 'MEMBER' || action == 'VIEWER') {
+                          _changeRole(c, action);
+                        } else if (action == 'REMOVE') {
+                          _removeCollaborator(c);
+                        }
+                      },
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(value: 'MEMBER', child: Text('Set as Member')),
+                        const PopupMenuItem(value: 'VIEWER', child: Text('Set as Viewer')),
+                        const PopupMenuItem(value: 'REMOVE', child: Text('Remove Collaborator', style: TextStyle(color: Colors.red))),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: _inviteCollaborator,
+            icon: const Icon(Icons.person_add_rounded),
+            label: const Text('Invite New Collaborator'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF4F46E5),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Activity Logs Bottom Sheet ──────────────────────────────────────────────
+
+class _ActivityLogsBottomSheet extends StatefulWidget {
+  final String tripId;
+
+  const _ActivityLogsBottomSheet({required this.tripId});
+
+  @override
+  State<_ActivityLogsBottomSheet> createState() => _ActivityLogsBottomSheetState();
+}
+
+class _ActivityLogsBottomSheetState extends State<_ActivityLogsBottomSheet> {
+  List<ActivityLogModel> _logs = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLogs();
+  }
+
+  Future<void> _loadLogs() async {
+    final auth = context.read<AuthProvider>();
+    final user = auth.currentUser;
+    if (user == null) return;
+
+    setState(() => _loading = true);
+    final logs = await auth.apiService.getActivityLogs(widget.tripId, token: user.token);
+    if (mounted) {
+      setState(() {
+        _logs = logs;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Trip Activity Audit Log', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (_loading)
+            const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()))
+          else if (_logs.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text('No activity logs recorded yet.', style: TextStyle(color: Colors.grey.shade600)),
+              ),
+            )
+          else
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: _logs.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (ctx, i) {
+                  final l = _logs[i];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4F46E5).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.bolt_rounded, color: Color(0xFF4F46E5), size: 18),
+                    ),
+                    title: Text(l.action, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    subtitle: Text(l.details, style: const TextStyle(fontSize: 12)),
+                    trailing: Text(
+                      '${l.timestamp.hour.toString().padLeft(2, '0')}:${l.timestamp.minute.toString().padLeft(2, '0')}',
+                      style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+                    ),
+                  );
+                },
+              ),
+            ),
+          const SizedBox(height: 16),
         ],
       ),
     );

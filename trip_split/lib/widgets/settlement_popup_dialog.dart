@@ -226,6 +226,41 @@ class _SettlementPopupDialogState extends State<SettlementPopupDialog> {
     }
   }
 
+  Future<void> _handleDelete(BuildContext context) async {
+    final auth = context.read<AuthProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final user = auth.currentUser;
+    if (user == null) return;
+
+    setState(() {
+      _isProcessing = true;
+      _statusText = 'Deleting settlement...';
+    });
+
+    final ok = await auth.apiService.deleteSettlement(
+      _currentProposal.settlementId,
+      token: user.token,
+    );
+
+    if (mounted) {
+      setState(() => _isProcessing = false);
+      if (ok) {
+        messenger.showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            content: const Text('Settlement statement deleted.'),
+          ),
+        );
+        widget.onActionComplete();
+      } else {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Failed to delete settlement.')),
+        );
+      }
+    }
+  }
+
   void _showUpiPaymentSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -431,20 +466,34 @@ class _SettlementPopupDialogState extends State<SettlementPopupDialog> {
                             ],
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.amberAccent.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            proposal.status.toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.amberAccent,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.amberAccent.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                proposal.status.toUpperCase(),
+                                style: const TextStyle(
+                                  color: Colors.amberAccent,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
                             ),
-                          ),
+                            if (proposal.settlementId.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline_rounded, color: Colors.white70, size: 20),
+                                visualDensity: VisualDensity.compact,
+                                tooltip: 'Delete Statement',
+                                onPressed: _isProcessing ? null : () => _handleDelete(context),
+                              ),
+                            ],
+                          ],
                         ),
                       ],
                     ),

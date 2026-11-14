@@ -322,12 +322,24 @@ class AuthProvider extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    final res = await _apiService.verifyToken(token: token, phone: phone);
+    // Call API 3: POST /api/Auth/biometric-login if userId is known
+    final savedUserId = await _storageService.getSavedUserId() ?? _currentUser?.id;
+    String activeToken = token;
+    if (savedUserId != null && savedUserId.isNotEmpty) {
+      final bioRes = await _apiService.biometricLogin(userId: savedUserId, authToken: token);
+      if (bioRes['success'] == true && bioRes['token'] != null) {
+        activeToken = bioRes['token'] as String;
+        await _storageService.saveAuthToken(activeToken, phone: phone, userId: savedUserId);
+        _apiService.setAuthToken(activeToken);
+      }
+    }
+
+    final res = await _apiService.verifyToken(token: activeToken, phone: phone);
     _isLoading = false;
 
     if (res['valid'] == true && res['user'] != null) {
       final user = res['user'] as UserModel;
-      final trips = await _apiService.getTrips(userId: user.id, token: token);
+      final trips = await _apiService.getTrips(userId: user.id, token: activeToken);
       user.trips = trips;
 
       _currentUser = user;
