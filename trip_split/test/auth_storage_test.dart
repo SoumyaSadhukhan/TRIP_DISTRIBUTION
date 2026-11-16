@@ -24,8 +24,11 @@ class MockApiService extends ApiService {
     required String phone,
     required String fullName,
     required String password,
+    String? username,
+    String? email,
     String? otp,
     int dietType = 0,
+    String? dietName,
   }) async {
     if (_users.containsKey(phone)) {
       return {'success': false, 'message': 'Account with this phone already exists'};
@@ -34,7 +37,7 @@ class MockApiService extends ApiService {
       id: 'mock-user-${DateTime.now().millisecondsSinceEpoch}',
       fullName: fullName,
       phone: phone,
-      username: fullName,
+      username: username ?? fullName,
       password: password,
       token: 'mock-token-123',
       dietType: dietType,
@@ -49,6 +52,8 @@ class MockApiService extends ApiService {
   Future<Map<String, dynamic>> login({
     required String phone,
     required String password,
+    String? email,
+    String? username,
   }) async {
     final user = _users[phone];
     if (user == null) {
@@ -69,13 +74,49 @@ class MockApiService extends ApiService {
   }
 
   @override
-  Future<List<Trip>> getTrips({required String userId, String? phone, String? token}) async => [];
+  Future<List<Trip>> getTrips({String? userId, String? phone, String? token}) async => [];
 
   @override
-  Future<List<NotificationModel>> getNotifications(String userId, {String? token}) async => [];
+  Future<List<NotificationModel>> getNotifications({String? userId, String? token}) async => [];
 
   @override
-  Future<List<SettlementProposal>> getPendingSettlements({required String userId, String? phone, String? token}) async => [];
+  Future<List<SettlementProposal>> getPendingSettlements({String? userId, String? phone, String? token}) async => [];
+
+  @override
+  Future<Map<String, dynamic>> createTrip({required Trip trip, String? currencyCode, String? token, String? userId}) async => {
+    'success': true,
+    'data': {'tripId': trip.id},
+  };
+
+  @override
+  Future<Map<String, dynamic>> createGroup({required String tripId, required String name, String? token}) async => {
+    'success': true,
+    'data': {'groupId': 'group-1'},
+  };
+
+  @override
+  Future<Map<String, dynamic>> createPerson({
+    required String tripId,
+    required String groupId,
+    required String name,
+    String? phone,
+    String? userId,
+    int dietType = 0,
+    String? dietName,
+    String? token,
+  }) async => {
+    'success': true,
+    'data': {'personId': 'person-1'},
+  };
+
+  @override
+  Future<Map<String, dynamic>> createExpense(Map<String, dynamic> expenseDto, {String? token}) async => {
+    'success': true,
+    'data': {'expenseId': 'exp-100'},
+  };
+
+  @override
+  Future<bool> logout([String? token]) async => true;
 }
 
 void main() {
@@ -150,62 +191,25 @@ void main() {
     });
   });
 
-  group('StorageService Tests', () {
-    test('saveUser and loadUser stores JSON and retrieves user data', () async {
-      final storage = StorageService(baseDirPath: testDir);
-      final now = DateTime.now();
-      final user = UserModel(
-        id: 'u-2',
-        username: 'bob',
-        password: 'bobpassword',
-        createdAt: now,
-        lastLoginAt: now,
-        trips: [
-          Trip(
-            id: 't-2',
-            name: 'Manali Trek',
-            createdAt: now,
-            groups: [],
-            expenses: [],
-          ),
-        ],
-      );
+  group('StorageService Session Tests', () {
+    test('saveAuthToken and getAuthToken persists JWT token and credentials', () async {
+      final storage = StorageService();
+      await storage.saveAuthToken('jwt-token-xyz', phone: '9876543210', userId: 'usr-1');
 
-      await storage.saveUser(user);
+      expect(await storage.getAuthToken(), 'jwt-token-xyz');
+      expect(await storage.getSavedPhone(), '9876543210');
+      expect(await storage.getSavedUserId(), 'usr-1');
 
-      expect(await storage.userExists('bob'), isTrue);
-
-      final loadedUser = await storage.loadUser('bob');
-      expect(loadedUser, isNotNull);
-      expect(loadedUser!.username, 'bob');
-      expect(loadedUser.password, 'bobpassword');
-      expect(loadedUser.trips.length, 1);
-      expect(loadedUser.trips.first.name, 'Manali Trek');
+      await storage.clearAuthToken();
+      expect(await storage.getAuthToken(), isNull);
     });
 
-    test('getAllUsers lists all registered user accounts', () async {
-      final storage = StorageService(baseDirPath: testDir);
-      final now = DateTime.now();
+    test('biometric preferences persist correctly', () async {
+      final storage = StorageService();
+      expect(await storage.isBiometricEnabled(), isFalse);
 
-      await storage.saveUser(UserModel(
-        id: 'u-1',
-        username: 'user1',
-        password: 'p1',
-        createdAt: now,
-        lastLoginAt: now,
-      ));
-
-      await storage.saveUser(UserModel(
-        id: 'u-2',
-        username: 'user2',
-        password: 'p2',
-        createdAt: now,
-        lastLoginAt: now,
-      ));
-
-      final allUsers = await storage.getAllUsers();
-      expect(allUsers.length, 2);
-      expect(allUsers.map((u) => u.username).toSet(), containsAll(['user1', 'user2']));
+      await storage.setBiometricEnabled(true);
+      expect(await storage.isBiometricEnabled(), isTrue);
     });
   });
 
@@ -267,9 +271,9 @@ void main() {
     });
   });
 
-  group('TripProvider Persistence Tests', () {
-    test('trip mutations trigger auto-save into user data', () async {
-      final storage = StorageService(baseDirPath: testDir);
+  group('TripProvider Tests', () {
+    test('trip mutations manage in-memory trips and invoke backend APIs', () async {
+      final storage = StorageService();
       final api = MockApiService();
       final auth = AuthProvider(storageService: storage, apiService: api);
 
@@ -279,27 +283,27 @@ void main() {
         password: 'pass1234',
         confirmPassword: 'pass1234',
       );
-      final tripProvider = TripProvider();
+      final tripProvider = TripProvider(apiService: api);
 
-      // Connect trip provider with user and auto-save callback
+      // Connect trip provider with user
       tripProvider.loadUserTrips(
         auth.currentUser!.trips,
-        onSave: (trips) => auth.saveCurrentUserData(trips),
+        token: auth.currentUser!.token,
       );
 
       // Add a trip
-      tripProvider.addTrip('Kerala Backwaters', description: 'Houseboat stay');
+      await tripProvider.addTrip('Kerala Backwaters', description: 'Houseboat stay');
       expect(tripProvider.trips.length, 1);
 
       // Add a group and person
       final tripId = tripProvider.trips.first.id;
-      tripProvider.addGroup(tripId, 'Group A');
+      await tripProvider.addGroup(tripId, 'Group A');
       final groupId = tripProvider.trips.first.groups.first.id;
-      tripProvider.addPerson(tripId, groupId, 'Emma', DietType.vegetarian);
+      await tripProvider.addPerson(tripId, groupId, 'Emma', DietType.vegetarian);
 
       // Add an expense
       final personId = tripProvider.trips.first.groups.first.members.first.id;
-      tripProvider.addExpense(
+      await tripProvider.addExpense(
         tripId,
         Expense(
           id: 'exp-100',
@@ -312,17 +316,11 @@ void main() {
         ),
       );
 
-      // Wait a tick for async save to finish
-      await Future.delayed(const Duration(milliseconds: 100));
-
-      // Reload user from storage and verify all data persisted in JSON
-      final loadedUser = await storage.loadUser('emma');
-      expect(loadedUser, isNotNull);
-      expect(loadedUser!.trips.length, 1);
-      expect(loadedUser.trips.first.name, 'Kerala Backwaters');
-      expect(loadedUser.trips.first.groups.first.name, 'Group A');
-      expect(loadedUser.trips.first.groups.first.members.first.name, 'Emma');
-      expect(loadedUser.trips.first.expenses.first.amount, 5000);
+      expect(tripProvider.trips.length, 1);
+      expect(tripProvider.trips.first.name, 'Kerala Backwaters');
+      expect(tripProvider.trips.first.groups.first.name, 'Group A');
+      expect(tripProvider.trips.first.groups.first.members.first.name, 'Emma');
+      expect(tripProvider.trips.first.expenses.first.amount, 5000);
     });
   });
 }

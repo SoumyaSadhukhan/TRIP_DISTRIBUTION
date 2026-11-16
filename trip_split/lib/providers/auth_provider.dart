@@ -21,7 +21,7 @@ class AuthProvider extends ChangeNotifier {
   // OTP state helpers for UI
   String? _lastSentOtp;
   bool _isOtpSent = false;
-  int _otpCountdown = 0;
+  final int _otpCountdown = 0;
 
   AuthProvider({
     StorageService? storageService,
@@ -70,37 +70,19 @@ class AuthProvider extends ChangeNotifier {
       final phone = await _storageService.getSavedPhone();
 
       if (token != null && token.isNotEmpty) {
+        _apiService.setAuthToken(token);
         final isBioEnabled = await _storageService.isBiometricEnabled();
 
-        // 1. ALWAYS load local cached user & trips first (Local is Master!)
-        final cachedUser = await _storageService.loadCachedUser(phone);
-        if (cachedUser != null) {
-          _currentUser = cachedUser;
-        }
-
-        // 2. Verify token with backend database if connected
+        // Verify token with backend database
         final verifyResult = await _apiService.verifyToken(token: token, phone: phone);
         if (verifyResult['valid'] == true && verifyResult['user'] != null) {
           final serverUser = verifyResult['user'] as UserModel;
 
-          // Preserve local trips if cached, and push local master state to DB first
-          final localTrips = _currentUser?.trips ?? [];
-          if (localTrips.isNotEmpty) {
-            await _apiService.syncTrips(userId: serverUser.id, trips: localTrips, token: token);
-          }
-
-          // Fetch complete trips from SQL Server
+          // Fetch complete trips directly from SQL Server
           final remoteTrips = await _apiService.getTrips(userId: serverUser.id, phone: serverUser.phone, token: token);
-          serverUser.trips = remoteTrips.isNotEmpty ? remoteTrips : localTrips;
+          serverUser.trips = remoteTrips;
 
           _currentUser = serverUser;
-          await _storageService.saveCachedUser(_currentUser!);
-          _isBiometricLocked = isBioEnabled;
-          _isCheckingToken = false;
-          notifyListeners();
-          return true;
-        } else if (_currentUser != null) {
-          // Offline mode with cached data
           _isBiometricLocked = isBioEnabled;
           _isCheckingToken = false;
           notifyListeners();
@@ -236,7 +218,6 @@ class AuthProvider extends ChangeNotifier {
 
       _currentUser = user;
       await _storageService.saveAuthToken(token, phone: user.phone, userId: user.id);
-      await _storageService.saveCachedUser(user);
 
       _successMessage = 'Account created successfully!';
       notifyListeners();
@@ -278,9 +259,9 @@ class AuthProvider extends ChangeNotifier {
       user.trips = trips;
 
       _currentUser = user;
+      _apiService.setAuthToken(token);
       await _storageService.saveAuthToken(token, phone: user.phone, userId: user.id);
       await _storageService.setBiometricEnabled(user.isBiometricEnabled);
-      await _storageService.saveCachedUser(user);
 
       notifyListeners();
       return true;
@@ -344,37 +325,19 @@ class AuthProvider extends ChangeNotifier {
 
       _currentUser = user;
       _isBiometricLocked = false;
-      await _storageService.saveCachedUser(user);
       notifyListeners();
       return true;
     } else {
-      final cachedUser = await _storageService.loadCachedUser(phone);
-      if (cachedUser != null) {
-        _currentUser = cachedUser;
-        _isBiometricLocked = false;
-        notifyListeners();
-        return true;
-      }
       _errorMessage = 'Session expired. Please log in with your password.';
       notifyListeners();
       return false;
     }
   }
 
-  /// Persists current user's trips to local storage immediately and syncs with backend if online
-  Future<void> saveCurrentUserData(List<Trip> trips) async {
+  /// Updates current user's trips in memory (all persistence handled directly via SQL Server APIs)
+  void saveCurrentUserData(List<Trip> trips) {
     if (_currentUser == null) return;
     _currentUser!.trips = List.from(trips);
-    await _storageService.saveCachedUser(_currentUser!);
-
-    // Proactively push local master changes to backend database if online
-    if (_currentUser!.token != null && _currentUser!.token!.isNotEmpty) {
-      _apiService.syncTrips(
-        userId: _currentUser!.id,
-        trips: trips,
-        token: _currentUser!.token,
-      ).catchError((_) => false);
-    }
   }
 
   /// Updates user profile name and dietary preference immediately across app and storage
@@ -395,10 +358,7 @@ class AuthProvider extends ChangeNotifier {
     );
     notifyListeners();
 
-    // 2. Persist to local cached storage
-    await _storageService.saveCachedUser(_currentUser!);
-
-    // 3. Sync to backend SQL Server database
+    // 2. Sync to backend SQL Server database
     final token = await _storageService.getAuthToken();
     final res = await _apiService.updateProfile(
       userId: _currentUser!.id,
@@ -414,7 +374,6 @@ class AuthProvider extends ChangeNotifier {
         dietType: user.dietType,
         dietName: user.dietName,
       );
-      await _storageService.saveCachedUser(_currentUser!);
       notifyListeners();
       return true;
     }
@@ -474,7 +433,6 @@ class AuthProvider extends ChangeNotifier {
       enabled: enabled,
       token: _currentUser!.token,
     );
-    await _storageService.saveCachedUser(_currentUser!);
     notifyListeners();
   }
 

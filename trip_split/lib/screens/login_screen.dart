@@ -84,7 +84,7 @@ class _LoginScreenState extends State<LoginScreen>
     if (user != null) {
       tripProvider.loadUserTrips(
         user.trips,
-        onSave: (trips) => authProvider.saveCurrentUserData(trips),
+        token: user.token,
       );
     }
   }

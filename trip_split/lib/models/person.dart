@@ -3,6 +3,7 @@ import 'enums.dart';
 
 class Person {
   final String id;
+  final String? groupId;
   final String? userId;
   final String? phone;
   String name;
@@ -13,6 +14,7 @@ class Person {
 
   Person({
     required this.id,
+    this.groupId,
     this.userId,
     this.phone,
     required this.name,
@@ -24,6 +26,7 @@ class Person {
 
   Person copyWith({
     String? id,
+    String? groupId,
     String? userId,
     String? phone,
     String? name,
@@ -34,6 +37,7 @@ class Person {
   }) {
     return Person(
       id: id ?? this.id,
+      groupId: groupId ?? this.groupId,
       userId: userId ?? this.userId,
       phone: phone ?? this.phone,
       name: name ?? this.name,
@@ -46,6 +50,7 @@ class Person {
 
   Map<String, dynamic> toJson() => {
         'id': id,
+        'groupId': groupId,
         'userId': userId,
         'phone': phone,
         'name': name,
@@ -56,13 +61,14 @@ class Person {
       };
 
   factory Person.fromJson(Map<String, dynamic> json) => Person(
-        id: json['id'],
-        userId: json['userId'],
-        phone: json['phone'],
-        name: json['name'],
-        dietType: DietType.values[json['dietType'] ?? 0],
-        paidAmount: json['paidAmount']?.toDouble() ?? 0.0,
-        owedAmount: json['owedAmount']?.toDouble() ?? 0.0,
-        balance: json['balance']?.toDouble() ?? 0.0,
+        id: (json['id'] ?? json['personId'] ?? '').toString(),
+        groupId: json['groupId']?.toString(),
+        userId: json['userId']?.toString(),
+        phone: json['phone']?.toString() ?? json['phoneNumber']?.toString(),
+        name: json['name']?.toString() ?? '',
+        dietType: DietType.values[((json['dietType'] is int ? json['dietType'] : int.tryParse(json['dietType']?.toString() ?? '0')) ?? 0).clamp(0, DietType.values.length - 1)],
+        paidAmount: (json['paidAmount'] as num?)?.toDouble() ?? 0.0,
+        owedAmount: (json['owedAmount'] as num?)?.toDouble() ?? 0.0,
+        balance: (json['balance'] as num?)?.toDouble() ?? 0.0,
       );
 }

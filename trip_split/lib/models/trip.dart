@@ -49,14 +49,48 @@ class Trip {
         'expenses': expenses.map((e) => e.toJson()).toList(),
       };
 
-  factory Trip.fromJson(Map<String, dynamic> json) => Trip(
-        id: json['id'],
-        userId: json['userId'],
-        isOwner: json['isOwner'] == true,
-        name: json['name'],
-        description: json['description'],
-        createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : DateTime.now(),
-        groups: (json['groups'] as List).map((e) => Group.fromJson(e)).toList(),
-        expenses: (json['expenses'] as List).map((e) => Expense.fromJson(e)).toList(),
-      );
+  factory Trip.fromJson(Map<String, dynamic> json) {
+    final tripId = (json['id'] ?? json['tripId'] ?? '').toString();
+    final rawGroups = json['groups'] as List? ?? [];
+    final rawPersons = json['persons'] as List? ?? [];
+    final allPersons = rawPersons.map((p) => Person.fromJson(p as Map<String, dynamic>)).toList();
+
+    List<Group> groupsList = [];
+    if (rawGroups.isNotEmpty) {
+      groupsList = rawGroups.map((g) {
+        final groupMap = g as Map<String, dynamic>;
+        final group = Group.fromJson(groupMap);
+        if (group.members.isEmpty && allPersons.isNotEmpty) {
+          final gid = (groupMap['groupId'] ?? groupMap['id'] ?? '').toString();
+          final matchingPersons = allPersons.where((p) => p.groupId == gid).toList();
+          if (matchingPersons.isNotEmpty) {
+            return group.copyWith(members: matchingPersons);
+          }
+        }
+        return group;
+      }).toList();
+    }
+
+    if (groupsList.isEmpty && allPersons.isNotEmpty) {
+      groupsList = [
+        Group(id: 'default', name: 'Members', members: allPersons)
+      ];
+    }
+
+    final rawExpenses = json['expenses'] as List? ?? [];
+    final expensesList = rawExpenses.map((e) => Expense.fromJson(e as Map<String, dynamic>)).toList();
+
+    return Trip(
+      id: tripId,
+      userId: json['userId']?.toString(),
+      isOwner: json['isOwner'] == true || json['role'] == 'OWNER',
+      name: json['name']?.toString() ?? '',
+      description: json['description']?.toString(),
+      createdAt: json['createdAt'] != null
+          ? (DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now())
+          : DateTime.now(),
+      groups: groupsList,
+      expenses: expensesList,
+    );
+  }
 }

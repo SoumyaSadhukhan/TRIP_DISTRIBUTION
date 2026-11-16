@@ -983,7 +983,7 @@ class _GroupCard extends StatelessWidget {
                       color: Colors.transparent,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(14),
-                        onTap: () {
+                        onTap: () async {
                           final name = nameController.text.trim();
                           if (name.isNotEmpty) {
                             if (isEditing) {
@@ -993,13 +993,13 @@ class _GroupCard extends StatelessWidget {
                               );
                               Navigator.pop(context);
                             } else {
-                              final success = context.read<TripProvider>().addPerson(
+                              final success = await context.read<TripProvider>().addPerson(
                                 tripId, group.id, name, selectedDiet,
                                 userId: linkedUserId, phone: linkedPhone,
                               );
-                              if (success) {
+                              if (success && context.mounted) {
                                 Navigator.pop(context);
-                              } else {
+                              } else if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text('Member "$name" or phone number already exists in this trip.'),

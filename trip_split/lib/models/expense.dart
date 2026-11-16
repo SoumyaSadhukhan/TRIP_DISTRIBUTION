@@ -47,13 +47,31 @@ class Expense {
         'splitAmongIds': splitAmongIds,
       };
 
-  factory Expense.fromJson(Map<String, dynamic> json) => Expense(
-        id: json['id'],
-        description: json['description'],
-        amount: json['amount'].toDouble(),
-        category: ExpenseCategory.values[json['category']],
-        paidById: json['paidById'],
-        date: DateTime.parse(json['date']),
-        splitAmongIds: List<String>.from(json['splitAmongIds']),
-      );
+  factory Expense.fromJson(Map<String, dynamic> json) {
+    List<String> splits = [];
+    if (json['splitAmongIds'] != null) {
+      splits = List<String>.from(json['splitAmongIds']);
+    } else if (json['splits'] is List) {
+      splits = (json['splits'] as List)
+          .map((s) => (s['personId'] ?? s['id'] ?? '').toString())
+          .where((id) => id.isNotEmpty)
+          .toList();
+    }
+
+    final catVal = json['category'] ?? json['categoryIndex'];
+    final catIndex = (catVal is int ? catVal : (int.tryParse(catVal?.toString() ?? '0') ?? 0))
+        .clamp(0, ExpenseCategory.values.length - 1);
+
+    return Expense(
+      id: (json['id'] ?? json['expenseId'] ?? '').toString(),
+      description: json['description']?.toString() ?? '',
+      amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
+      category: ExpenseCategory.values[catIndex],
+      paidById: (json['paidById'] ?? json['paidByPersonId'] ?? '').toString(),
+      date: json['date'] != null
+          ? (DateTime.tryParse(json['date'].toString()) ?? DateTime.now())
+          : (json['expenseDate'] != null ? (DateTime.tryParse(json['expenseDate'].toString()) ?? DateTime.now()) : DateTime.now()),
+      splitAmongIds: splits,
+    );
+  }
 }

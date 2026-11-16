@@ -212,7 +212,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           context.read<TripProvider>().loadUserTrips(
             user.trips,
-            onSave: (trips) => auth.saveCurrentUserData(trips),
+            token: user.token,
           );
         });
       }

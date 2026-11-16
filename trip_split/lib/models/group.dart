@@ -13,11 +13,12 @@ class Group {
   });
 
   Group copyWith({
+    String? id,
     String? name,
     List<Person>? members,
   }) {
     return Group(
-      id: id,
+      id: id ?? this.id,
       name: name ?? this.name,
       members: members ?? this.members,
     );
@@ -30,8 +31,8 @@ class Group {
       };
 
   factory Group.fromJson(Map<String, dynamic> json) => Group(
-        id: json['id'],
-        name: json['name'],
-        members: (json['members'] as List).map((e) => Person.fromJson(e)).toList(),
+        id: (json['id'] ?? json['groupId'] ?? '').toString(),
+        name: json['name']?.toString() ?? '',
+        members: (json['members'] as List? ?? []).map((e) => Person.fromJson(e as Map<String, dynamic>)).toList(),
       );
 }

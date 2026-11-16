@@ -91,20 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() => _isSyncing = true);
 
     try {
-      // 1. PUSH local offline trips to SQL Server DB if pending changes exist
-      final localTrips = tripProvider.trips;
-      if (localTrips.isNotEmpty && tripProvider.hasPendingSync) {
-        final ok = await auth.apiService.syncTrips(
-          userId: user.id,
-          trips: localTrips,
-          token: user.token,
-        );
-        if (ok) {
-          tripProvider.clearPendingSync();
-        }
-      }
-
-      // 2. FETCH updated remote trips from SQL Server DB
+      // 1. FETCH updated remote trips directly from SQL Server DB
       final remoteTrips = await auth.apiService.getTrips(
         userId: user.id,
         phone: user.phone,
@@ -114,7 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
         tripProvider.updateFromRemote(remoteTrips);
       }
 
-      // 3. FETCH live notification count
+      // 2. FETCH live notification count
       final notifs = await auth.apiService.getNotifications(
         userId: user.id,
         token: user.token,
@@ -671,10 +658,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       onDismissed: (_) {
-                        provider.deleteTrip(trip.id);
-                        if (authUser != null) {
-                          context.read<AuthProvider>().apiService.deleteTrip(trip.id, token: authUser.token, userId: authUser.id);
-                        }
+                        provider.deleteTrip(trip.id, token: authUser?.token);
                       },
                       child: _TripCard(
                         trip: trip,

@@ -566,7 +566,20 @@ class ApiService {
         final data = jsonDecode(response.body);
         final list = data['data'] ?? data['trips'] ?? (data is List ? data : []);
         if (list is List) {
-          return list.map((t) => Trip.fromJson(t)).toList();
+          final tripSummaries = list;
+          final detailedTrips = await Future.wait(
+            tripSummaries.map((s) async {
+              final tripId = (s['tripId'] ?? s['id'] ?? '').toString();
+              if (tripId.isNotEmpty) {
+                final detail = await getTripById(tripId, token: token);
+                if (detail['success'] == true && detail['trip'] != null) {
+                  return Trip.fromJson(detail['trip']);
+                }
+              }
+              return Trip.fromJson(s);
+            }),
+          );
+          return detailedTrips;
         }
       }
       return [];
@@ -894,6 +907,7 @@ class ApiService {
           'tripId': tripId,
           'groupId': groupId,
           'name': name,
+          if (phone != null) 'phoneNumber': phone,
           if (phone != null) 'phone': phone,
           if (userId != null) 'userId': userId,
           'dietType': dietType,

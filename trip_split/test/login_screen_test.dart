@@ -24,14 +24,17 @@ class MockApiService extends ApiService {
     required String phone,
     required String fullName,
     required String password,
+    String? username,
+    String? email,
     String? otp,
     int dietType = 0,
+    String? dietName,
   }) async {
     final user = UserModel(
       id: 'mock-user-123',
       fullName: fullName,
       phone: phone,
-      username: fullName,
+      username: username ?? fullName,
       password: password,
       token: 'mock-token-123',
       dietType: dietType,
@@ -46,12 +49,14 @@ class MockApiService extends ApiService {
   Future<Map<String, dynamic>> login({
     required String phone,
     required String password,
+    String? email,
+    String? username,
   }) async {
     final user = _users[phone] ?? UserModel(
       id: 'mock-user-login',
       fullName: phone,
       phone: phone,
-      username: phone,
+      username: username ?? phone,
       password: password,
       token: 'mock-token-123',
       createdAt: DateTime.now(),
@@ -66,13 +71,16 @@ class MockApiService extends ApiService {
   }
 
   @override
-  Future<List<Trip>> getTrips({required String userId, String? phone, String? token}) async => [];
+  Future<List<Trip>> getTrips({String? userId, String? phone, String? token}) async => [];
 
   @override
-  Future<List<NotificationModel>> getNotifications(String userId, {String? token}) async => [];
+  Future<List<NotificationModel>> getNotifications({String? userId, String? token}) async => [];
 
   @override
-  Future<List<SettlementProposal>> getPendingSettlements({required String userId, String? phone, String? token}) async => [];
+  Future<List<SettlementProposal>> getPendingSettlements({String? userId, String? phone, String? token}) async => [];
+
+  @override
+  Future<bool> logout([String? token]) async => true;
 }
 
 void main() {
@@ -109,7 +117,7 @@ void main() {
     final storage = StorageService(baseDirPath: testDir);
     final api = MockApiService();
     final auth = AuthProvider(storageService: storage, apiService: api);
-    final trip = TripProvider();
+    final trip = TripProvider(apiService: api);
 
     await tester.pumpWidget(createTestWidget(auth: auth, trip: trip));
     while (auth.isCheckingToken) {
@@ -118,7 +126,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     // Verify Login Screen initial state
-    expect(find.text('TripSplit'), findsOneWidget);
+    expect(find.text('EquiTrip'), findsWidgets);
     expect(find.text('Sign In'), findsNWidgets(2)); // Tab and Button
     expect(find.text('Register with OTP'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Phone Number'), findsOneWidget);
@@ -127,7 +135,7 @@ void main() {
 
     // Switch to Create Account mode
     await tester.tap(find.text('Register with OTP'));
-    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
 
     // Verify Confirm Password appears
     expect(find.widgetWithText(TextFormField, 'Confirm Password'), findsOneWidget);
@@ -144,7 +152,7 @@ void main() {
     final storage = StorageService(baseDirPath: testDir);
     final api = MockApiService();
     final auth = AuthProvider(storageService: storage, apiService: api);
-    final trip = TripProvider();
+    final trip = TripProvider(apiService: api);
 
     await tester.pumpWidget(createTestWidget(auth: auth, trip: trip));
     while (auth.isCheckingToken) {
@@ -154,7 +162,7 @@ void main() {
 
     // Switch to Create Account
     await tester.tap(find.text('Register with OTP'));
-    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
 
     // Enter name, phone, otp, password, confirm password
     await tester.enterText(find.widgetWithText(TextFormField, 'Full Name'), 'Sam Altman');
@@ -186,7 +194,7 @@ void main() {
     final storage = StorageService(baseDirPath: testDir);
     final api = MockApiService();
     final auth = AuthProvider(storageService: storage, apiService: api);
-    final trip = TripProvider();
+    final trip = TripProvider(apiService: api);
 
     await tester.pumpWidget(createTestWidget(auth: auth, trip: trip));
     while (auth.isCheckingToken) {
@@ -200,19 +208,18 @@ void main() {
       password: 'pass1234',
       confirmPassword: 'pass1234',
     );
-    trip.loadUserTrips(auth.currentUser!.trips, onSave: (trips) => auth.saveCurrentUserData(trips));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    trip.loadUserTrips(auth.currentUser!.trips, onSave: (trips) async => auth.saveCurrentUserData(trips));
+    await tester.pumpAndSettle();
 
-    expect(find.text('👤 test_logout_user'), findsOneWidget);
+    expect(find.text('Hello, test_logout_user 👋'), findsOneWidget);
 
     // Tap logout button
-    await tester.tap(find.byIcon(Icons.logout));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byIcon(Icons.logout_rounded));
+    await tester.pumpAndSettle();
 
     // Dialog appears
-    expect(find.text('Log Out'), findsNWidgets(2)); // Title and action button
+    expect(find.text('Log Out?'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Log Out'), findsOneWidget);
     expect(find.text('Cancel'), findsOneWidget);
 
     // Confirm logout
