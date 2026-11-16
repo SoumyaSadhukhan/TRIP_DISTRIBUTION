@@ -174,11 +174,13 @@ class AuthProvider extends ChangeNotifier {
     required String fullName,
     required String password,
     required String confirmPassword,
+    String? email,
+    String? username,
     String? otp,
     int dietType = 0,
   }) async {
-    if (phone.trim().isEmpty) {
-      _errorMessage = 'Phone number is required';
+    if (phone.trim().isEmpty && (email == null || email.trim().isEmpty)) {
+      _errorMessage = 'Phone number or email is required';
       notifyListeners();
       return false;
     }
@@ -205,6 +207,8 @@ class AuthProvider extends ChangeNotifier {
     final res = await _apiService.register(
       phone: phone.trim(),
       fullName: fullName.trim(),
+      email: email?.trim(),
+      username: username?.trim(),
       password: password,
       otp: otp,
       dietType: dietType,
@@ -217,6 +221,7 @@ class AuthProvider extends ChangeNotifier {
       final token = res['token'] as String;
 
       _currentUser = user;
+      _apiService.setAuthToken(token);
       await _storageService.saveAuthToken(token, phone: user.phone, userId: user.id);
 
       _successMessage = 'Account created successfully!';
@@ -229,11 +234,11 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Logs in existing user with Phone & Password
-  Future<bool> login(String phone, String password) async {
-    final cleanPhone = phone.trim();
-    if (cleanPhone.isEmpty) {
-      _errorMessage = 'Please enter your phone number';
+  /// Logs in existing user with Phone or Email & Password
+  Future<bool> login(String phone, String password, {String? email, String? username}) async {
+    final cleanIdentifier = phone.trim();
+    if (cleanIdentifier.isEmpty && (email == null || email.trim().isEmpty)) {
+      _errorMessage = 'Please enter your email or phone number';
       notifyListeners();
       return false;
     }
@@ -247,7 +252,13 @@ class AuthProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-    final res = await _apiService.login(phone: cleanPhone, password: password);
+    final isEmail = email != null || cleanIdentifier.contains('@');
+    final res = await _apiService.login(
+      phone: isEmail ? '' : cleanIdentifier,
+      email: isEmail ? (email ?? cleanIdentifier) : null,
+      username: username,
+      password: password,
+    );
     _isLoading = false;
 
     if (res['success'] == true && res['user'] != null) {

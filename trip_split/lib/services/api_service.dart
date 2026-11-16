@@ -30,15 +30,9 @@ class ApiService {
   String? get activeToken => _cachedToken;
 
   List<String> get candidateUrls {
-    if (kIsWeb) {
-      return ['http://localhost:5262/api', 'http://127.0.0.1:5262/api'];
-    }
     return [
-      'http://localhost:5262/api',      // Localhost
-      'http://10.0.2.2:5262/api',       // Android Emulator loopback
-      'http://127.0.0.1:5262/api',      // USB / adb reverse
-      'http://10.130.176.248:5262/api', // Laptop Wi-Fi IP
-      'http://192.168.1.111:5262/api',  // Alternative LAN IP
+      'http://127.0.0.1:5262/api',
+      'http://localhost:5262/api',
     ];
   }
 

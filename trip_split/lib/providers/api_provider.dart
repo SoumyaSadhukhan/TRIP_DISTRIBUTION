@@ -20,6 +20,7 @@ class ApiProvider extends ChangeNotifier {
   List<SettlementProposal> _tripSettlements = [];
   List<NotificationModel> _notifications = [];
   int _unreadNotificationCount = 0;
+  
 
   bool get isLoading => _isLoading;
   String? get error => _error;

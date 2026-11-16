@@ -277,12 +277,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.grey.shade200),
               ),
-              child: ListTile(
-                leading: const Icon(Icons.lock_reset_rounded, color: _primaryIndigo),
-                title: const Text('Change Account Password', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                subtitle: const Text('Update your security password on server', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-                onTap: _showChangePasswordDialog,
+              child: Material(
+                color: Colors.transparent,
+                child: ListTile(
+                  leading: const Icon(Icons.lock_reset_rounded, color: _primaryIndigo),
+                  title: const Text('Change Account Password', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: const Text('Update your security password on server', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                  onTap: _showChangePasswordDialog,
+                ),
               ),
             ),
             const SizedBox(height: 30),

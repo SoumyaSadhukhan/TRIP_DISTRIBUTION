@@ -21,6 +21,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   // Register controllers
   final _regNameController = TextEditingController();
+  final _regEmailController = TextEditingController();
   final _regPhoneController = TextEditingController();
   final _regOtpController = TextEditingController();
   final _regPasswordController = TextEditingController();
@@ -69,6 +70,7 @@ class _LoginScreenState extends State<LoginScreen>
     _loginPhoneController.dispose();
     _loginPasswordController.dispose();
     _regNameController.dispose();
+    _regEmailController.dispose();
     _regPhoneController.dispose();
     _regOtpController.dispose();
     _regPasswordController.dispose();
@@ -95,10 +97,14 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isActionLoading = true);
     try {
       final authProvider = context.read<AuthProvider>();
-      final phone = _loginPhoneController.text.trim();
+      final identifier = _loginPhoneController.text.trim();
       final password = _loginPasswordController.text;
 
-      final success = await authProvider.login(phone, password);
+      final success = await authProvider.login(
+        identifier,
+        password,
+        email: identifier.contains('@') ? identifier : null,
+      );
       if (success && mounted) {
         _onLoginSuccess();
       }
@@ -186,6 +192,7 @@ class _LoginScreenState extends State<LoginScreen>
     if (!_formKey.currentState!.validate()) return;
 
     final phone = _regPhoneController.text.trim();
+    final email = _regEmailController.text.trim();
     final name = _regNameController.text.trim();
     final otp = _regOtpController.text.trim();
     final password = _regPasswordController.text;
@@ -207,6 +214,7 @@ class _LoginScreenState extends State<LoginScreen>
       final success = await authProvider.register(
         phone: phone,
         fullName: name,
+        email: email.isNotEmpty ? email : null,
         password: password,
         confirmPassword: confirm,
         otp: otp,
@@ -827,13 +835,13 @@ class _LoginScreenState extends State<LoginScreen>
                                 if (!_isSignUp) ...[
                                   TextFormField(
                                     controller: _loginPhoneController,
-                                    keyboardType: TextInputType.phone,
+                                    keyboardType: TextInputType.emailAddress,
                                     decoration: const InputDecoration(
-                                      labelText: 'Phone Number',
-                                      hintText: 'e.g. 9876543210',
-                                      prefixIcon: Icon(Icons.phone_android_rounded),
+                                      labelText: 'Phone Number or Email',
+                                      hintText: 'e.g. 9876543210 or user@example.com',
+                                      prefixIcon: Icon(Icons.person_outline_rounded),
                                     ),
-                                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Phone number is required' : null,
+                                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Phone number or email is required' : null,
                                   ),
                                   const SizedBox(height: 14),
                                   TextFormField(
@@ -892,6 +900,22 @@ class _LoginScreenState extends State<LoginScreen>
                                       prefixIcon: Icon(Icons.person_outline_rounded),
                                     ),
                                     validator: (v) => (v == null || v.trim().isEmpty) ? 'Full name is required' : null,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  TextFormField(
+                                    controller: _regEmailController,
+                                    keyboardType: TextInputType.emailAddress,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Email Address',
+                                      hintText: 'e.g. testuser@example.com',
+                                      prefixIcon: Icon(Icons.email_outlined),
+                                    ),
+                                    validator: (v) {
+                                      if (v != null && v.trim().isNotEmpty && (!v.contains('@') || !v.contains('.'))) {
+                                        return 'Enter a valid email address';
+                                      }
+                                      return null;
+                                    },
                                   ),
                                   const SizedBox(height: 14),
                                   TextFormField(

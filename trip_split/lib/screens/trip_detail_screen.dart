@@ -619,7 +619,9 @@ class _GroupCard extends StatelessWidget {
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
+        child: Material(
+          color: Colors.transparent,
+          child: ExpansionTile(
           tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           leading: Container(
             width: 44,
@@ -701,6 +703,7 @@ class _GroupCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }

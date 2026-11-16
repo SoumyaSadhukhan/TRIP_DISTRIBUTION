@@ -129,7 +129,7 @@ void main() {
     expect(find.text('EquiTrip'), findsWidgets);
     expect(find.text('Sign In'), findsNWidgets(2)); // Tab and Button
     expect(find.text('Register with OTP'), findsOneWidget);
-    expect(find.widgetWithText(TextFormField, 'Phone Number'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, 'Phone Number or Email'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Password'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Confirm Password'), findsNothing);
 

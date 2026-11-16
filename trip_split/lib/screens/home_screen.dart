@@ -285,7 +285,9 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final username = auth.currentUser?.username ?? 'User';
+    final username = (auth.currentUser?.fullName != null && auth.currentUser!.fullName.isNotEmpty)
+        ? auth.currentUser!.fullName
+        : (auth.currentUser?.username ?? 'User');
 
     return Scaffold(
       body: RefreshIndicator(
