@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/trip_provider.dart';
 import '../widgets/animations/ambient_particles_background.dart';
-import '../widgets/animations/animated_wing_logo.dart';
 import '../widgets/animations/staggered_entrance.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -785,19 +784,66 @@ class _LoginScreenState extends State<LoginScreen>
                         ),
                       ),
 
-                      // Animated Wing Logo Hero Section
+                      // Hero Section
                       Padding(
                         padding: EdgeInsets.symmetric(
-                          vertical: isCompact ? 4 : 8,
+                          horizontal: 20,
+                          vertical: isCompact ? 8 : 14,
                         ),
-                        child: AnimatedWingLogo(
-                          size: isCompact ? 62 : 82,
-                          isInteractive: true,
-                          showText: true,
-                          title: 'EquiTrip',
-                          subtitle: _isSignUp
-                              ? 'Split Smart • Fly Free • Verified OTP'
-                              : 'Fair Splits • Seamless Group Travel',
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF4F46E5).withValues(alpha: 0.4),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.flight_takeoff_rounded,
+                                color: Colors.white,
+                                size: 28,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _isSignUp ? 'Create Account' : 'Welcome Back',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: -0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _isSignUp
+                                        ? 'Verify email via OTP & split expenses'
+                                        : 'Sign in to access your synchronized trips',
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.8),
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
 
@@ -1068,53 +1114,82 @@ class _LoginScreenState extends State<LoginScreen>
                                     const SizedBox(height: 12),
                                     StaggeredEntrance(
                                       delay: const Duration(milliseconds: 90),
-                                      child: Row(
+                                      child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          // Country Code Dropdown
-                                          Container(
-                                            height: 56,
-                                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                                            decoration: BoxDecoration(
-                                              border: Border.all(color: Colors.grey.shade400),
-                                              borderRadius: BorderRadius.circular(14),
-                                              color: Colors.white,
-                                            ),
-                                            child: DropdownButtonHideUnderline(
-                                              child: DropdownButton<String>(
-                                                value: _regCountryCode,
-                                                icon: const Icon(Icons.arrow_drop_down_rounded, size: 20),
-                                                items: const [
-                                                  DropdownMenuItem(value: '+91', child: Text('🇮🇳 +91')),
-                                                  DropdownMenuItem(value: '+1', child: Text('🇺🇸 +1')),
-                                                  DropdownMenuItem(value: '+44', child: Text('🇬🇧 +44')),
-                                                  DropdownMenuItem(value: '+971', child: Text('🇦🇪 +971')),
-                                                  DropdownMenuItem(value: '+61', child: Text('🇦🇺 +61')),
-                                                  DropdownMenuItem(value: '+65', child: Text('🇸🇬 +65')),
-                                                  DropdownMenuItem(value: '+49', child: Text('🇩🇪 +49')),
-                                                ],
-                                                onChanged: (val) {
-                                                  if (val != null) setState(() => _regCountryCode = val);
-                                                },
+                                          Row(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              // Country Code Dropdown (Exact same height and styling as phone input)
+                                              SizedBox(
+                                                width: 115,
+                                                child: DropdownButtonFormField<String>(
+                                                  value: _regCountryCode,
+                                                  decoration: InputDecoration(
+                                                    labelText: 'Code',
+                                                    filled: true,
+                                                    fillColor: Colors.white,
+                                                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+                                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                                    enabledBorder: OutlineInputBorder(
+                                                      borderRadius: BorderRadius.circular(14),
+                                                      borderSide: BorderSide(color: Colors.grey.shade300),
+                                                    ),
+                                                    focusedBorder: OutlineInputBorder(
+                                                      borderRadius: BorderRadius.circular(14),
+                                                      borderSide: const BorderSide(color: _primaryIndigo, width: 2),
+                                                    ),
+                                                  ),
+                                                  icon: const Icon(Icons.arrow_drop_down_rounded, size: 20),
+                                                  isExpanded: true,
+                                                  items: const [
+                                                    DropdownMenuItem(value: '+91', child: Text('🇮🇳 +91', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                                                    DropdownMenuItem(value: '+1', child: Text('🇺🇸 +1', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                                                    DropdownMenuItem(value: '+44', child: Text('🇬🇧 +44', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                                                    DropdownMenuItem(value: '+971', child: Text('🇦🇪 +971', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                                                    DropdownMenuItem(value: '+61', child: Text('🇦🇺 +61', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                                                    DropdownMenuItem(value: '+65', child: Text('🇸🇬 +65', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                                                    DropdownMenuItem(value: '+49', child: Text('🇩🇪 +49', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                                                  ],
+                                                  onChanged: (val) {
+                                                    if (val != null) setState(() => _regCountryCode = val);
+                                                  },
+                                                ),
                                               ),
-                                            ),
+                                              const SizedBox(width: 8),
+                                              // Mobile Number Input
+                                              Expanded(
+                                                child: TextFormField(
+                                                  controller: _regPhoneController,
+                                                  keyboardType: TextInputType.phone,
+                                                  decoration: InputDecoration(
+                                                    labelText: 'Mobile Number',
+                                                    hintText: 'e.g. 9876543210',
+                                                    prefixIcon: const Icon(Icons.phone_android_rounded),
+                                                    filled: true,
+                                                    fillColor: Colors.white,
+                                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                                    enabledBorder: OutlineInputBorder(
+                                                      borderRadius: BorderRadius.circular(14),
+                                                      borderSide: BorderSide(color: Colors.grey.shade300),
+                                                    ),
+                                                    focusedBorder: OutlineInputBorder(
+                                                      borderRadius: BorderRadius.circular(14),
+                                                      borderSide: const BorderSide(color: _primaryIndigo, width: 2),
+                                                    ),
+                                                  ),
+                                                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Phone number is required' : null,
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                          const SizedBox(width: 8),
-                                          // Mobile Number Input
-                                          Expanded(
-                                            child: TextFormField(
-                                              controller: _regPhoneController,
-                                              keyboardType: TextInputType.phone,
-                                              decoration: InputDecoration(
-                                                labelText: 'Mobile Number',
-                                                hintText: 'e.g. 9876543210',
-                                                prefixIcon: const Icon(Icons.phone_android_rounded),
-                                                helperText: 'For trip friends to find you',
-                                                filled: true,
-                                                fillColor: Colors.white,
-                                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                                              ),
-                                              validator: (v) => (v == null || v.trim().isEmpty) ? 'Phone number is required' : null,
+                                          const SizedBox(height: 4),
+                                          Padding(
+                                            padding: const EdgeInsets.only(left: 4),
+                                            child: Text(
+                                              'For trip friends to find you',
+                                              style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
                                             ),
                                           ),
                                         ],
