@@ -199,6 +199,7 @@ class ApiService {
   /// API 1: POST /api/Auth/register
   Future<Map<String, dynamic>> register({
     required String phone,
+    String? countryCode,
     required String fullName,
     required String password,
     String? username,
@@ -210,6 +211,7 @@ class ApiService {
     try {
       final response = await _smartPost('/Auth/register', {
         'phone': phone,
+        'countryCode': countryCode,
         'fullName': fullName,
         'username': username ?? phone,
         'email': email ?? '${username ?? phone}@tripdistribution.app',

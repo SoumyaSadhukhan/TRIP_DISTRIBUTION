@@ -209,6 +209,7 @@ class AuthProvider extends ChangeNotifier {
   /// Registers user after OTP verification
   Future<bool> register({
     required String phone,
+    String? countryCode,
     required String fullName,
     required String password,
     required String confirmPassword,
@@ -244,6 +245,7 @@ class AuthProvider extends ChangeNotifier {
 
     final res = await _apiService.register(
       phone: phone.trim(),
+      countryCode: countryCode,
       fullName: fullName.trim(),
       email: email?.trim(),
       username: username?.trim(),

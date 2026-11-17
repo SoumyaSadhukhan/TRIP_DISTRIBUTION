@@ -28,6 +28,7 @@ class _LoginScreenState extends State<LoginScreen>
   final _regPasswordController = TextEditingController();
   final _regConfirmPasswordController = TextEditingController();
   int _selectedDietType = 0;
+  String _regCountryCode = '+91';
 
   bool _isSignUp = false;
   bool _obscurePassword = true;
@@ -236,8 +237,10 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isActionLoading = true);
     try {
       final authProvider = context.read<AuthProvider>();
+      final fullPhone = phone.startsWith('+') ? phone : '$_regCountryCode$phone';
       final success = await authProvider.register(
-        phone: phone,
+        phone: fullPhone,
+        countryCode: _regCountryCode,
         fullName: name,
         email: email.isNotEmpty ? email : null,
         password: password,
@@ -248,6 +251,10 @@ class _LoginScreenState extends State<LoginScreen>
 
       if (success && mounted) {
         _onLoginSuccess();
+      } else if (mounted && authProvider.errorMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(authProvider.errorMessage!), backgroundColor: Colors.red),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -974,16 +981,53 @@ class _LoginScreenState extends State<LoginScreen>
                                     },
                                   ),
                                   const SizedBox(height: 14),
-                                  TextFormField(
-                                    controller: _regPhoneController,
-                                    keyboardType: TextInputType.phone,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Phone Number (for friends to find you)',
-                                      hintText: 'e.g. 9876543210',
-                                      prefixIcon: Icon(Icons.phone_android_rounded),
-                                      helperText: 'Phone number is only used for adding trip friends',
-                                    ),
-                                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Phone number is required' : null,
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Country Code Dropdown
+                                      Container(
+                                        height: 56,
+                                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        decoration: BoxDecoration(
+                                          border: Border.all(color: Colors.grey.shade300),
+                                          borderRadius: BorderRadius.circular(12),
+                                          color: Colors.white,
+                                        ),
+                                        child: DropdownButtonHideUnderline(
+                                          child: DropdownButton<String>(
+                                            value: _regCountryCode,
+                                            icon: const Icon(Icons.arrow_drop_down_rounded, size: 20),
+                                            items: const [
+                                              DropdownMenuItem(value: '+91', child: Text('🇮🇳 +91')),
+                                              DropdownMenuItem(value: '+1', child: Text('🇺🇸 +1')),
+                                              DropdownMenuItem(value: '+44', child: Text('🇬🇧 +44')),
+                                              DropdownMenuItem(value: '+971', child: Text('🇦🇪 +971')),
+                                              DropdownMenuItem(value: '+61', child: Text('🇦🇺 +61')),
+                                              DropdownMenuItem(value: '+65', child: Text('🇸🇬 +65')),
+                                              DropdownMenuItem(value: '+49', child: Text('🇩🇪 +49')),
+                                            ],
+                                            onChanged: (val) {
+                                              if (val != null) setState(() => _regCountryCode = val);
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      // Mobile Number Input
+                                      Expanded(
+                                        child: TextFormField(
+                                          controller: _regPhoneController,
+                                          keyboardType: TextInputType.phone,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Mobile Number',
+                                            hintText: 'e.g. 9876543210',
+                                            prefixIcon: Icon(Icons.phone_android_rounded),
+                                            helperText: 'For trip friends to find you',
+                                          ),
+                                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Phone number is required' : null,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   const SizedBox(height: 14),
                                   TextFormField(
