@@ -7,6 +7,8 @@ import '../providers/auth_provider.dart';
 import '../providers/trip_provider.dart';
 import '../services/calculation_service.dart';
 import '../services/pdf_service.dart';
+import '../widgets/animations/animated_wing_logo.dart';
+import '../widgets/animations/celebration_confetti.dart';
 
 class SettlementScreen extends StatelessWidget {
   final String tripId;
@@ -29,9 +31,11 @@ class SettlementScreen extends StatelessWidget {
         final balances = provider.getBalances(tripId);
         final auth = context.read<AuthProvider>();
 
-        return Scaffold(
-          backgroundColor: const Color(0xFFF8F9FF),
-          body: CustomScrollView(
+        return CelebrationConfetti(
+          isTriggered: settlements.isEmpty,
+          child: Scaffold(
+            backgroundColor: const Color(0xFFF8F9FF),
+            body: CustomScrollView(
             slivers: [
               // ── AppBar ─────────────────────────────────────────────
               SliverAppBar(
@@ -279,6 +283,7 @@ class SettlementScreen extends StatelessWidget {
                   ),
                 )
               : null,
+          ),
         );
       },
     );
@@ -286,66 +291,120 @@ class SettlementScreen extends StatelessWidget {
 
   Widget _buildAllSettledState(BuildContext context, AuthProvider auth, dynamic trip) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFFD1FAE5), Color(0xFFA7F3D0)],
-              ),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.check_circle_rounded, size: 52, color: Color(0xFF059669)),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'All Settled Up! 🎉',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF1F2937)),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Everyone has paid their fair share',
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-          ),
-          const SizedBox(height: 32),
-          Container(
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)]),
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF4F46E5).withValues(alpha: 0.35),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Golden Animated Wing Flight Badge
+            Container(
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const RadialGradient(
+                  colors: [
+                    Color(0xFFFEF3C7),
+                    Color(0xFFFDE68A),
+                    Colors.white,
+                  ],
                 ),
-              ],
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.25),
+                    blurRadius: 32,
+                    spreadRadius: 6,
+                  ),
+                ],
+              ),
+              child: const AnimatedWingLogo(
+                size: 78,
+                showText: false,
+                wingColors: [
+                  Color(0xFFFDE68A),
+                  Color(0xFFF59E0B),
+                  Color(0xFFD97706),
+                  Color(0xFFB45309),
+                ],
+                auraColor: Color(0xFFF59E0B),
+              ),
             ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: () => PdfService.downloadOrPrintPdf(trip: trip, currentUser: auth.currentUser),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.picture_as_pdf_rounded, color: Colors.white, size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        'Export Summary PDF',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15),
-                      ),
-                    ],
+            const SizedBox(height: 24),
+            const Text(
+              'All Settled Up! 🎉',
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF1F2937),
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD1FAE5),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.verified_rounded, size: 16, color: Color(0xFF059669)),
+                  SizedBox(width: 6),
+                  Text(
+                    'Net Trip Balance: ₹0.00 • Everyone Square',
+                    style: TextStyle(color: Color(0xFF065F46), fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'All travel expenses are reconciled. Freedom to take off on the next adventure!',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 13, height: 1.4),
+            ),
+            const SizedBox(height: 28),
+            Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)]),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF4F46E5).withValues(alpha: 0.35),
+                    blurRadius: 14,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => PdfService.downloadOrPrintPdf(trip: trip, currentUser: auth.currentUser),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.picture_as_pdf_rounded, color: Colors.white, size: 20),
+                        SizedBox(width: 10),
+                        Text(
+                          'Export Settlement PDF',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -611,14 +670,21 @@ class _TransferCard extends StatelessWidget {
                       ],
                     ),
                     Padding(
-                      padding: const EdgeInsets.only(left: 10, top: 4, bottom: 4),
+                      padding: const EdgeInsets.only(left: 8, top: 4, bottom: 4),
                       child: Row(
                         children: [
-                          Container(width: 1, height: 20, color: Colors.grey.shade200),
-                          const SizedBox(width: 12),
+                          Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEEF2FF),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Icon(Icons.flight_takeoff_rounded, size: 12, color: Color(0xFF4F46E5)),
+                          ),
+                          const SizedBox(width: 8),
                           Text(
-                            'pays to',
-                            style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                            'transfers to',
+                            style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w500),
                           ),
                         ],
                       ),

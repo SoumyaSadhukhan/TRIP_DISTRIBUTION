@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/trip_provider.dart';
+import '../widgets/animations/ambient_particles_background.dart';
+import '../widgets/animations/animated_wing_logo.dart';
+import '../widgets/animations/staggered_entrance.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -679,477 +682,615 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final size = MediaQuery.of(context).size;
-    final isCompact = size.height < 700;
+    final isCompact = size.height < 720;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1E1B4B),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
-                child: Column(
-                  children: [
-                    // Header Section
-                    Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: isCompact ? 10 : 16,
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Icon(Icons.flight_takeoff_rounded, color: Colors.white, size: 24),
-                          ),
-                          const SizedBox(width: 12),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: const Color(0xFF0F172A),
+      body: AmbientParticlesBackground(
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: Column(
+                    children: [
+                      // Top Action Bar with Debug OTP Switch
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: isCompact ? 6 : 10,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // Minimal Brand Insignia
+                            Row(
                               children: [
-                                Text(
+                                Container(
+                                  padding: const EdgeInsets.all(7),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(
+                                    Icons.flight_takeoff_rounded,
+                                    color: Color(0xFF38BDF8),
+                                    size: 18,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Text(
                                   'EquiTrip',
                                   style: TextStyle(
                                     color: Colors.white,
-                                    fontSize: 22,
+                                    fontSize: 16,
                                     fontWeight: FontWeight.w900,
-                                    letterSpacing: -0.5,
+                                    letterSpacing: -0.3,
                                   ),
-                                ),
-                                Text(
-                                  'Smart Trip Expense Splitter',
-                                  style: TextStyle(color: Colors.white70, fontSize: 12),
                                 ),
                               ],
                             ),
-                          ),
-                          // ===============================================================
-                          // #if DEBUG (Environment & OTP Bypass Switch)
-                          // ===============================================================
-                          InkWell(
-                            onTap: _showEnvironmentSheet,
-                            borderRadius: BorderRadius.circular(20),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: auth.isDebugMode
-                                    ? Colors.amber.withValues(alpha: 0.25)
-                                    : Colors.green.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    auth.isDebugMode ? Icons.bolt_rounded : Icons.verified_rounded,
-                                    color: auth.isDebugMode ? Colors.amberAccent : Colors.lightGreenAccent,
-                                    size: 14,
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    auth.isDebugMode ? 'Debug: OTP Bypass' : 'Production',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          // #else (PRODUCTION)
-                        ],
-                      ),
-                    ),
 
-                    // Title Bar
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _isSignUp ? 'Create Account' : 'Welcome Back',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: isCompact ? 22 : 26,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _isSignUp
-                                  ? 'Verify email via OTP & create your account'
-                                  : 'Sign in to access your synchronized trips',
-                              style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Scrollable Card Container
-                    Expanded(
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFF8F9FF),
-                          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                        ),
-                        child: SingleChildScrollView(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: isCompact ? 16 : 24,
-                          ),
-                          child: Form(
-                            key: _formKey,
-                            child: Column(
-                              children: [
-                                // Tab Switcher
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade200,
-                                    borderRadius: BorderRadius.circular(14),
+                            // ===============================================================
+                            // #if DEBUG (Environment & OTP Bypass Switch)
+                            // ===============================================================
+                            InkWell(
+                              onTap: _showEnvironmentSheet,
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: auth.isDebugMode
+                                      ? Colors.amber.withValues(alpha: 0.25)
+                                      : Colors.green.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: auth.isDebugMode
+                                        ? Colors.amber.shade300
+                                        : Colors.green.shade300,
+                                    width: 1.2,
                                   ),
-                                  child: TabBar(
-                                    controller: _tabController,
-                                    indicator: BoxDecoration(
-                                      color: _primaryIndigo,
-                                      borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: (auth.isDebugMode ? Colors.amber : Colors.green)
+                                          .withValues(alpha: 0.25),
+                                      blurRadius: 8,
                                     ),
-                                    indicatorSize: TabBarIndicatorSize.tab,
-                                    labelColor: Colors.white,
-                                    unselectedLabelColor: Colors.grey.shade700,
-                                    dividerColor: Colors.transparent,
-                                    tabs: const [
-                                      Tab(text: 'Sign In'),
-                                      Tab(text: 'Register with OTP'),
-                                    ],
-                                  ),
+                                  ],
                                 ),
-                                const SizedBox(height: 18),
-
-                                // Error Banner
-                                if (auth.errorMessage != null)
-                                  Container(
-                                    margin: const EdgeInsets.only(bottom: 14),
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red.shade50,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: Colors.red.shade200),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      auth.isDebugMode ? Icons.bolt_rounded : Icons.verified_rounded,
+                                      color: auth.isDebugMode ? Colors.amberAccent : Colors.lightGreenAccent,
+                                      size: 15,
                                     ),
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.error_outline_rounded, color: Colors.red.shade700, size: 20),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            auth.errorMessage!,
-                                            style: TextStyle(color: Colors.red.shade800, fontSize: 12, fontWeight: FontWeight.w600),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-
-                                // Success Banner
-                                if (auth.successMessage != null)
-                                  Container(
-                                    margin: const EdgeInsets.only(bottom: 14),
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green.shade50,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: Colors.green.shade200),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.check_circle_outline_rounded, color: Colors.green.shade700, size: 20),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            auth.successMessage!,
-                                            style: TextStyle(color: Colors.green.shade800, fontSize: 12, fontWeight: FontWeight.w600),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-
-                                // SIGN IN FORM
-                                if (!_isSignUp) ...[
-                                  TextFormField(
-                                    controller: _loginPhoneController,
-                                    keyboardType: TextInputType.emailAddress,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Phone Number or Email',
-                                      hintText: 'e.g. 9876543210 or user@example.com',
-                                      prefixIcon: Icon(Icons.person_outline_rounded),
-                                    ),
-                                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Phone number or email is required' : null,
-                                  ),
-                                  const SizedBox(height: 14),
-                                  TextFormField(
-                                    controller: _loginPasswordController,
-                                    obscureText: _obscurePassword,
-                                    decoration: InputDecoration(
-                                      labelText: 'Password',
-                                      prefixIcon: const Icon(Icons.lock_outline_rounded),
-                                      suffixIcon: IconButton(
-                                        icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                                      ),
-                                    ),
-                                    validator: (v) => (v == null || v.isEmpty) ? 'Password is required' : null,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: TextButton(
-                                      onPressed: _showForgotPasswordSheet,
-                                      child: const Text('Forgot Password?', style: TextStyle(color: _primaryIndigo, fontWeight: FontWeight.w600, fontSize: 12)),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 14),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: FilledButton(
-                                      onPressed: (_isActionLoading || auth.isLoading) ? null : _handleLogin,
-                                      style: FilledButton.styleFrom(
-                                        backgroundColor: _primaryIndigo,
-                                        padding: const EdgeInsets.symmetric(vertical: 16),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                      ),
-                                      child: (_isActionLoading || auth.isLoading)
-                                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                                          : const Text('Sign In', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  OutlinedButton.icon(
-                                    icon: const Icon(Icons.fingerprint_rounded, color: _primaryIndigo),
-                                    label: const Text('Sign In with Biometrics / PIN', style: TextStyle(color: _primaryIndigo, fontWeight: FontWeight.w600)),
-                                    style: OutlinedButton.styleFrom(
-                                      minimumSize: const Size(double.infinity, 48),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                      side: BorderSide(color: _primaryIndigo.withValues(alpha: 0.3)),
-                                    ),
-                                    onPressed: _handleBiometricLogin,
-                                  ),
-                                ] else ...[
-                                  // REGISTER WITH OTP FORM
-                                  TextFormField(
-                                    controller: _regNameController,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Full Name',
-                                      prefixIcon: Icon(Icons.person_outline_rounded),
-                                    ),
-                                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Full name is required' : null,
-                                  ),
-                                  const SizedBox(height: 14),
-                                  TextFormField(
-                                    controller: _regEmailController,
-                                    keyboardType: TextInputType.emailAddress,
-                                    decoration: InputDecoration(
-                                      labelText: 'Email Address (for OTP & Account)',
-                                      hintText: 'e.g. testuser@example.com',
-                                      prefixIcon: const Icon(Icons.email_outlined),
-                                      suffixIcon: Padding(
-                                        padding: const EdgeInsets.only(right: 6),
-                                        child: TextButton(
-                                          onPressed: _isOtpLoading ? null : _handleSendRegOtp,
-                                          child: _isOtpLoading
-                                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                                              : const Text('Get OTP', style: TextStyle(fontWeight: FontWeight.bold, color: _primaryIndigo)),
-                                        ),
-                                      ),
-                                    ),
-                                    validator: (v) {
-                                      if (v == null || v.trim().isEmpty) return 'Email is required';
-                                      if (!v.contains('@') || !v.contains('.')) return 'Enter a valid email address';
-                                      return null;
-                                    },
-                                  ),
-                                  const SizedBox(height: 14),
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      // Country Code Dropdown
-                                      Container(
-                                        height: 56,
-                                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                                        decoration: BoxDecoration(
-                                          border: Border.all(color: Colors.grey.shade300),
-                                          borderRadius: BorderRadius.circular(12),
-                                          color: Colors.white,
-                                        ),
-                                        child: DropdownButtonHideUnderline(
-                                          child: DropdownButton<String>(
-                                            value: _regCountryCode,
-                                            icon: const Icon(Icons.arrow_drop_down_rounded, size: 20),
-                                            items: const [
-                                              DropdownMenuItem(value: '+91', child: Text('🇮🇳 +91')),
-                                              DropdownMenuItem(value: '+1', child: Text('🇺🇸 +1')),
-                                              DropdownMenuItem(value: '+44', child: Text('🇬🇧 +44')),
-                                              DropdownMenuItem(value: '+971', child: Text('🇦🇪 +971')),
-                                              DropdownMenuItem(value: '+61', child: Text('🇦🇺 +61')),
-                                              DropdownMenuItem(value: '+65', child: Text('🇸🇬 +65')),
-                                              DropdownMenuItem(value: '+49', child: Text('🇩🇪 +49')),
-                                            ],
-                                            onChanged: (val) {
-                                              if (val != null) setState(() => _regCountryCode = val);
-                                            },
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      // Mobile Number Input
-                                      Expanded(
-                                        child: TextFormField(
-                                          controller: _regPhoneController,
-                                          keyboardType: TextInputType.phone,
-                                          decoration: const InputDecoration(
-                                            labelText: 'Mobile Number',
-                                            hintText: 'e.g. 9876543210',
-                                            prefixIcon: Icon(Icons.phone_android_rounded),
-                                            helperText: 'For trip friends to find you',
-                                          ),
-                                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Phone number is required' : null,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 14),
-                                  TextFormField(
-                                    controller: _regOtpController,
-                                    keyboardType: TextInputType.number,
-                                    maxLength: 6,
-                                    decoration: InputDecoration(
-                                      labelText: '6-Digit Email OTP Code',
-                                      prefixIcon: const Icon(Icons.pin_rounded),
-                                      counterText: '',
-                                      helperText: auth.isDebugMode ? 'Debug: Use Bypass OTP button or check banner' : 'Enter OTP sent to your email inbox',
-                                    ),
-                                    validator: (v) => (v == null || v.trim().length != 6) ? 'Enter 6-digit OTP' : null,
-                                  ),
-
-                                  // ===============================================================
-                                  // #if DEBUG (Debug Mode: Only this button bypasses the OTP in UI)
-                                  // ===============================================================
-                                  if (kDebugMode && auth.isDebugMode) ...[
-                                    const SizedBox(height: 6),
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: OutlinedButton.icon(
-                                        style: OutlinedButton.styleFrom(
-                                          foregroundColor: Colors.amber.shade900,
-                                          backgroundColor: Colors.amber.shade50,
-                                          side: BorderSide(color: Colors.amber.shade400),
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                        ),
-                                        icon: const Icon(Icons.bolt_rounded, size: 16),
-                                        label: const Text('Bypass OTP (Auto-fill 123456)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                        onPressed: () {
-                                          _regOtpController.text = '123456';
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('⚡ Debug OTP Bypassed: 123456 entered'),
-                                              backgroundColor: Color(0xFF059669),
-                                              duration: Duration(seconds: 2),
-                                            ),
-                                          );
-                                        },
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      auth.isDebugMode ? 'Debug: OTP Bypass' : 'Production',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                   ],
-                                  // #else (PRODUCTION: OTP received strictly via Email)
+                                ),
+                              ),
+                            ),
+                            // #else (PRODUCTION)
+                          ],
+                        ),
+                      ),
 
-                                  const SizedBox(height: 14),
-                                  DropdownButtonFormField<int>(
-                                    value: _selectedDietType,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Dietary Preference',
-                                      prefixIcon: Icon(Icons.restaurant_rounded),
+                      // Animated Wing Logo Hero Section
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          vertical: isCompact ? 4 : 8,
+                        ),
+                        child: AnimatedWingLogo(
+                          size: isCompact ? 62 : 82,
+                          isInteractive: true,
+                          showText: true,
+                          title: 'EquiTrip',
+                          subtitle: _isSignUp
+                              ? 'Split Smart • Fly Free • Verified OTP'
+                              : 'Fair Splits • Seamless Group Travel',
+                        ),
+                      ),
+
+                      const SizedBox(height: 6),
+
+                      // Scrollable Form Container with rounded card and subtle shadow
+                      Expanded(
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Color(0x33000000),
+                                blurRadius: 24,
+                                offset: Offset(0, -6),
+                              ),
+                            ],
+                          ),
+                          child: SingleChildScrollView(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 22,
+                              vertical: isCompact ? 14 : 20,
+                            ),
+                            child: Form(
+                              key: _formKey,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  // Tab Switcher with gradient active pill
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF1F5F9),
+                                      borderRadius: BorderRadius.circular(16),
                                     ),
-                                    items: const [
-                                      DropdownMenuItem(value: 0, child: Text('Vegetarian')),
-                                      DropdownMenuItem(value: 1, child: Text('Non-Vegetarian')),
-                                      DropdownMenuItem(value: 2, child: Text('Non-Veg + Alcoholic')),
+                                    child: TabBar(
+                                      controller: _tabController,
+                                      indicator: BoxDecoration(
+                                        gradient: const LinearGradient(
+                                          colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                                        ),
+                                        borderRadius: BorderRadius.circular(14),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(0xFF4F46E5).withValues(alpha: 0.35),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      indicatorSize: TabBarIndicatorSize.tab,
+                                      labelColor: Colors.white,
+                                      unselectedLabelColor: const Color(0xFF64748B),
+                                      labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                      dividerColor: Colors.transparent,
+                                      tabs: const [
+                                        Tab(
+                                          icon: Icon(Icons.login_rounded, size: 16),
+                                          text: 'Sign In',
+                                        ),
+                                        Tab(
+                                          icon: Icon(Icons.how_to_reg_rounded, size: 16),
+                                          text: 'Register with OTP',
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+
+                                  // Error Banner
+                                  if (auth.errorMessage != null)
+                                    StaggeredEntrance(
+                                      child: Container(
+                                        margin: const EdgeInsets.only(bottom: 14),
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.shade50,
+                                          borderRadius: BorderRadius.circular(14),
+                                          border: Border.all(color: Colors.red.shade200),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.error_outline_rounded, color: Colors.red.shade700, size: 20),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                auth.errorMessage!,
+                                                style: TextStyle(color: Colors.red.shade800, fontSize: 12, fontWeight: FontWeight.w600),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+
+                                  // Success Banner
+                                  if (auth.successMessage != null)
+                                    StaggeredEntrance(
+                                      child: Container(
+                                        margin: const EdgeInsets.only(bottom: 14),
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.green.shade50,
+                                          borderRadius: BorderRadius.circular(14),
+                                          border: Border.all(color: Colors.green.shade200),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.check_circle_outline_rounded, color: Colors.green.shade700, size: 20),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                auth.successMessage!,
+                                                style: TextStyle(color: Colors.green.shade800, fontSize: 12, fontWeight: FontWeight.w600),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+
+                                  // SIGN IN FORM
+                                  if (!_isSignUp) ...[
+                                    StaggeredEntrance(
+                                      delay: const Duration(milliseconds: 40),
+                                      child: TextFormField(
+                                        controller: _loginPhoneController,
+                                        keyboardType: TextInputType.emailAddress,
+                                        decoration: InputDecoration(
+                                          labelText: 'Phone Number or Email',
+                                          hintText: 'e.g. 9876543210 or user@example.com',
+                                          prefixIcon: const Icon(Icons.person_outline_rounded),
+                                          filled: true,
+                                          fillColor: Colors.white,
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                        ),
+                                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Phone number or email is required' : null,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    StaggeredEntrance(
+                                      delay: const Duration(milliseconds: 80),
+                                      child: TextFormField(
+                                        controller: _loginPasswordController,
+                                        obscureText: _obscurePassword,
+                                        decoration: InputDecoration(
+                                          labelText: 'Password',
+                                          prefixIcon: const Icon(Icons.lock_outline_rounded),
+                                          filled: true,
+                                          fillColor: Colors.white,
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                          suffixIcon: IconButton(
+                                            icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                          ),
+                                        ),
+                                        validator: (v) => (v == null || v.isEmpty) ? 'Password is required' : null,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: TextButton(
+                                        onPressed: _showForgotPasswordSheet,
+                                        child: const Text('Forgot Password?', style: TextStyle(color: _primaryIndigo, fontWeight: FontWeight.w600, fontSize: 12)),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    StaggeredEntrance(
+                                      delay: const Duration(milliseconds: 120),
+                                      child: Container(
+                                        height: 52,
+                                        decoration: BoxDecoration(
+                                          gradient: const LinearGradient(
+                                            colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ),
+                                          borderRadius: BorderRadius.circular(16),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: const Color(0xFF4F46E5).withValues(alpha: 0.35),
+                                              blurRadius: 16,
+                                              offset: const Offset(0, 6),
+                                            ),
+                                          ],
+                                        ),
+                                        child: ElevatedButton(
+                                          onPressed: (_isActionLoading || auth.isLoading) ? null : _handleLogin,
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.transparent,
+                                            shadowColor: Colors.transparent,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                          ),
+                                          child: (_isActionLoading || auth.isLoading)
+                                              ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                                              : const Row(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    Text('Sign In', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                                                    SizedBox(width: 8),
+                                                    Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+                                                  ],
+                                                ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    StaggeredEntrance(
+                                      delay: const Duration(milliseconds: 160),
+                                      child: OutlinedButton.icon(
+                                        icon: const Icon(Icons.fingerprint_rounded, color: _primaryIndigo),
+                                        label: const Text('Sign In with Biometrics / PIN', style: TextStyle(color: _primaryIndigo, fontWeight: FontWeight.w600)),
+                                        style: OutlinedButton.styleFrom(
+                                          minimumSize: const Size(double.infinity, 48),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                          side: BorderSide(color: _primaryIndigo.withValues(alpha: 0.3)),
+                                        ),
+                                        onPressed: _handleBiometricLogin,
+                                      ),
+                                    ),
+                                  ] else ...[
+                                    // REGISTER WITH OTP FORM
+                                    StaggeredEntrance(
+                                      delay: const Duration(milliseconds: 30),
+                                      child: TextFormField(
+                                        controller: _regNameController,
+                                        decoration: InputDecoration(
+                                          labelText: 'Full Name',
+                                          prefixIcon: const Icon(Icons.person_outline_rounded),
+                                          filled: true,
+                                          fillColor: Colors.white,
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                        ),
+                                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Full name is required' : null,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    StaggeredEntrance(
+                                      delay: const Duration(milliseconds: 60),
+                                      child: TextFormField(
+                                        controller: _regEmailController,
+                                        keyboardType: TextInputType.emailAddress,
+                                        decoration: InputDecoration(
+                                          labelText: 'Email Address (for OTP & Account)',
+                                          hintText: 'e.g. testuser@example.com',
+                                          prefixIcon: const Icon(Icons.email_outlined),
+                                          filled: true,
+                                          fillColor: Colors.white,
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                          suffixIcon: Padding(
+                                            padding: const EdgeInsets.only(right: 6),
+                                            child: TextButton(
+                                              onPressed: _isOtpLoading ? null : _handleSendRegOtp,
+                                              child: _isOtpLoading
+                                                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                                  : const Text('Get OTP', style: TextStyle(fontWeight: FontWeight.bold, color: _primaryIndigo)),
+                                            ),
+                                          ),
+                                        ),
+                                        validator: (v) {
+                                          if (v == null || v.trim().isEmpty) return 'Email is required';
+                                          if (!v.contains('@') || !v.contains('.')) return 'Enter a valid email address';
+                                          return null;
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    StaggeredEntrance(
+                                      delay: const Duration(milliseconds: 90),
+                                      child: Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          // Country Code Dropdown
+                                          Container(
+                                            height: 56,
+                                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                                            decoration: BoxDecoration(
+                                              border: Border.all(color: Colors.grey.shade400),
+                                              borderRadius: BorderRadius.circular(14),
+                                              color: Colors.white,
+                                            ),
+                                            child: DropdownButtonHideUnderline(
+                                              child: DropdownButton<String>(
+                                                value: _regCountryCode,
+                                                icon: const Icon(Icons.arrow_drop_down_rounded, size: 20),
+                                                items: const [
+                                                  DropdownMenuItem(value: '+91', child: Text('🇮🇳 +91')),
+                                                  DropdownMenuItem(value: '+1', child: Text('🇺🇸 +1')),
+                                                  DropdownMenuItem(value: '+44', child: Text('🇬🇧 +44')),
+                                                  DropdownMenuItem(value: '+971', child: Text('🇦🇪 +971')),
+                                                  DropdownMenuItem(value: '+61', child: Text('🇦🇺 +61')),
+                                                  DropdownMenuItem(value: '+65', child: Text('🇸🇬 +65')),
+                                                  DropdownMenuItem(value: '+49', child: Text('🇩🇪 +49')),
+                                                ],
+                                                onChanged: (val) {
+                                                  if (val != null) setState(() => _regCountryCode = val);
+                                                },
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          // Mobile Number Input
+                                          Expanded(
+                                            child: TextFormField(
+                                              controller: _regPhoneController,
+                                              keyboardType: TextInputType.phone,
+                                              decoration: InputDecoration(
+                                                labelText: 'Mobile Number',
+                                                hintText: 'e.g. 9876543210',
+                                                prefixIcon: const Icon(Icons.phone_android_rounded),
+                                                helperText: 'For trip friends to find you',
+                                                filled: true,
+                                                fillColor: Colors.white,
+                                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                              ),
+                                              validator: (v) => (v == null || v.trim().isEmpty) ? 'Phone number is required' : null,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    StaggeredEntrance(
+                                      delay: const Duration(milliseconds: 120),
+                                      child: TextFormField(
+                                        controller: _regOtpController,
+                                        keyboardType: TextInputType.number,
+                                        maxLength: 6,
+                                        decoration: InputDecoration(
+                                          labelText: '6-Digit Email OTP Code',
+                                          prefixIcon: const Icon(Icons.pin_rounded),
+                                          counterText: '',
+                                          filled: true,
+                                          fillColor: Colors.white,
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                          helperText: auth.isDebugMode ? 'Debug: Use Bypass OTP button or check banner' : 'Enter OTP sent to your email inbox',
+                                        ),
+                                        validator: (v) => (v == null || v.trim().length != 6) ? 'Enter 6-digit OTP' : null,
+                                      ),
+                                    ),
+
+                                    // ===============================================================
+                                    // #if DEBUG (Debug Mode: Only this button bypasses the OTP in UI)
+                                    // ===============================================================
+                                    if (kDebugMode && auth.isDebugMode) ...[
+                                      const SizedBox(height: 6),
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: OutlinedButton.icon(
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor: Colors.amber.shade900,
+                                            backgroundColor: Colors.amber.shade50,
+                                            side: BorderSide(color: Colors.amber.shade400, width: 1.5),
+                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          ),
+                                          icon: const Icon(Icons.bolt_rounded, size: 18, color: Colors.amber),
+                                          label: const Text('⚡ Bypass OTP (Auto-fill 123456)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                          onPressed: () {
+                                            _regOtpController.text = '123456';
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('⚡ Debug OTP Bypassed: 123456 entered'),
+                                                backgroundColor: Color(0xFF059669),
+                                                duration: Duration(seconds: 2),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
                                     ],
-                                    onChanged: (val) {
-                                      if (val != null) setState(() => _selectedDietType = val);
-                                    },
-                                  ),
-                                  const SizedBox(height: 14),
-                                  TextFormField(
-                                    controller: _regPasswordController,
-                                    obscureText: _obscurePassword,
-                                    decoration: InputDecoration(
-                                      labelText: 'Password',
-                                      prefixIcon: const Icon(Icons.lock_outline_rounded),
-                                      suffixIcon: IconButton(
-                                        icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                    // #else (PRODUCTION: OTP received strictly via Email)
+
+                                    const SizedBox(height: 12),
+                                    StaggeredEntrance(
+                                      delay: const Duration(milliseconds: 150),
+                                      child: DropdownButtonFormField<int>(
+                                        value: _selectedDietType,
+                                        decoration: InputDecoration(
+                                          labelText: 'Dietary Preference',
+                                          prefixIcon: const Icon(Icons.restaurant_rounded),
+                                          filled: true,
+                                          fillColor: Colors.white,
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                        ),
+                                        items: const [
+                                          DropdownMenuItem(value: 0, child: Text('Vegetarian')),
+                                          DropdownMenuItem(value: 1, child: Text('Non-Vegetarian')),
+                                          DropdownMenuItem(value: 2, child: Text('Non-Veg + Alcoholic')),
+                                        ],
+                                        onChanged: (val) {
+                                          if (val != null) setState(() => _selectedDietType = val);
+                                        },
                                       ),
                                     ),
-                                    validator: (v) => (v == null || v.length < 4) ? 'Minimum 4 characters required' : null,
-                                  ),
-                                  const SizedBox(height: 14),
-                                  TextFormField(
-                                    controller: _regConfirmPasswordController,
-                                    obscureText: _obscureConfirmPassword,
-                                    decoration: InputDecoration(
-                                      labelText: 'Confirm Password',
-                                      prefixIcon: const Icon(Icons.lock_outline_rounded),
-                                      suffixIcon: IconButton(
-                                        icon: Icon(_obscureConfirmPassword ? Icons.visibility_off : Icons.visibility),
-                                        onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                                    const SizedBox(height: 12),
+                                    StaggeredEntrance(
+                                      delay: const Duration(milliseconds: 180),
+                                      child: TextFormField(
+                                        controller: _regPasswordController,
+                                        obscureText: _obscurePassword,
+                                        decoration: InputDecoration(
+                                          labelText: 'Password',
+                                          prefixIcon: const Icon(Icons.lock_outline_rounded),
+                                          filled: true,
+                                          fillColor: Colors.white,
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                          suffixIcon: IconButton(
+                                            icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                          ),
+                                        ),
+                                        validator: (v) => (v == null || v.length < 4) ? 'Minimum 4 characters required' : null,
                                       ),
                                     ),
-                                    validator: (v) {
-                                      if (v == null || v.isEmpty) return 'Please confirm your password';
-                                      if (v != _regPasswordController.text) return 'Passwords do not match';
-                                      return null;
-                                    },
-                                  ),
-                                  const SizedBox(height: 20),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: FilledButton(
-                                      onPressed: (_isActionLoading || auth.isLoading) ? null : _handleRegister,
-                                      style: FilledButton.styleFrom(
-                                        backgroundColor: _violet,
-                                        padding: const EdgeInsets.symmetric(vertical: 16),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                    const SizedBox(height: 12),
+                                    StaggeredEntrance(
+                                      delay: const Duration(milliseconds: 210),
+                                      child: TextFormField(
+                                        controller: _regConfirmPasswordController,
+                                        obscureText: _obscureConfirmPassword,
+                                        decoration: InputDecoration(
+                                          labelText: 'Confirm Password',
+                                          prefixIcon: const Icon(Icons.lock_outline_rounded),
+                                          filled: true,
+                                          fillColor: Colors.white,
+                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                          suffixIcon: IconButton(
+                                            icon: Icon(_obscureConfirmPassword ? Icons.visibility_off : Icons.visibility),
+                                            onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                                          ),
+                                        ),
+                                        validator: (v) {
+                                          if (v == null || v.isEmpty) return 'Please confirm your password';
+                                          if (v != _regPasswordController.text) return 'Passwords do not match';
+                                          return null;
+                                        },
                                       ),
-                                      child: (_isActionLoading || auth.isLoading)
-                                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                                          : const Text('Create Account & Verify OTP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                                     ),
-                                  ),
+                                    const SizedBox(height: 18),
+                                    StaggeredEntrance(
+                                      delay: const Duration(milliseconds: 240),
+                                      child: Container(
+                                        height: 52,
+                                        decoration: BoxDecoration(
+                                          gradient: const LinearGradient(
+                                            colors: [Color(0xFF7C3AED), Color(0xFF4F46E5)],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ),
+                                          borderRadius: BorderRadius.circular(16),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: const Color(0xFF7C3AED).withValues(alpha: 0.35),
+                                              blurRadius: 16,
+                                              offset: const Offset(0, 6),
+                                            ),
+                                          ],
+                                        ),
+                                        child: ElevatedButton(
+                                          onPressed: (_isActionLoading || auth.isLoading) ? null : _handleRegister,
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.transparent,
+                                            shadowColor: Colors.transparent,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                          ),
+                                          child: (_isActionLoading || auth.isLoading)
+                                              ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                                              : const Row(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    Text('Create Account & Verify OTP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                                                    SizedBox(width: 8),
+                                                    Icon(Icons.how_to_reg_rounded, color: Colors.white, size: 20),
+                                                  ],
+                                                ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ],
-                              ],
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/trip.dart';
 import '../providers/auth_provider.dart';
 import '../providers/trip_provider.dart';
+import '../widgets/animations/animated_wing_logo.dart';
 import '../widgets/settlement_popup_dialog.dart';
 import 'friends_screen.dart';
 import 'notifications_screen.dart';
@@ -751,15 +752,15 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         children: [
           Container(
-            width: 100,
-            height: 100,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFFEEF2FF), Color(0xFFE0E7FF)],
-              ),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
               shape: BoxShape.circle,
+              color: const Color(0xFFEEF2FF).withValues(alpha: 0.8),
             ),
-            child: const Icon(Icons.flight_takeoff_rounded, size: 48, color: Color(0xFF4F46E5)),
+            child: const AnimatedWingLogo(
+              size: 72,
+              showText: false,
+            ),
           ),
           const SizedBox(height: 20),
           const Text(
@@ -965,13 +966,27 @@ class _TripCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      trip.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                        color: Color(0xFF1F2937),
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            trip.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                              color: Color(0xFF1F2937),
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Icon(Icons.flight_takeoff_rounded, size: 12, color: accent),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 5),
                     Row(
