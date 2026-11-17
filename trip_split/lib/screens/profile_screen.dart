@@ -240,59 +240,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 24),
 
-            // App Environment Setup (Debug vs Production)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: auth.isDebugMode ? Colors.amber.shade100 : Colors.green.shade100,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      auth.isDebugMode ? Icons.bug_report_rounded : Icons.verified_rounded,
-                      color: auth.isDebugMode ? Colors.amber.shade800 : Colors.green.shade700,
-                      size: 22,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Environment: ${auth.isDebugMode ? "Debug" : "Production"}',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                        ),
-                        Text(
-                          auth.isDebugMode
-                              ? 'OTP displayed in UI for QA testing'
-                              : 'OTP dispatched via email address',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Switch(
-                    value: auth.isDebugMode,
-                    activeColor: Colors.amber.shade800,
-                    inactiveThumbColor: Colors.green.shade700,
-                    onChanged: (val) async {
-                      await auth.setEnvironment(val ? 'debug' : 'production');
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-
             // Biometric Settings
             Container(
               padding: const EdgeInsets.all(16),

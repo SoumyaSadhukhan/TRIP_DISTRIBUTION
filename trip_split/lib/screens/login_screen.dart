@@ -1,4 +1,5 @@
 // lib/screens/login_screen.dart
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
@@ -402,6 +403,40 @@ class _LoginScreenState extends State<LoginScreen>
                     counterText: '',
                   ),
                 ),
+
+                // ===============================================================
+                // #if DEBUG (Debug Mode: Only this button bypasses the OTP in UI)
+                // ===============================================================
+                if (kDebugMode && isDebug) ...[
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.amber.shade900,
+                        backgroundColor: Colors.amber.shade50,
+                        side: BorderSide(color: Colors.amber.shade400),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.bolt_rounded, size: 16),
+                      label: const Text('Bypass OTP (Auto-fill 123456)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      onPressed: () {
+                        otpCtrl.text = '123456';
+                        setSheetState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('⚡ Debug OTP Bypassed: 123456 entered'),
+                            backgroundColor: Color(0xFF059669),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+                // #else (PRODUCTION: OTP must be received via Email)
+
                 const SizedBox(height: 14),
 
                 // New Password
@@ -686,13 +721,18 @@ class _LoginScreenState extends State<LoginScreen>
                               ],
                             ),
                           ),
+                          // ===============================================================
+                          // #if DEBUG (Environment & OTP Bypass Switch)
+                          // ===============================================================
                           InkWell(
                             onTap: _showEnvironmentSheet,
                             borderRadius: BorderRadius.circular(20),
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.18),
+                                color: auth.isDebugMode
+                                    ? Colors.amber.withValues(alpha: 0.25)
+                                    : Colors.green.withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(20),
                                 border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
                               ),
@@ -700,13 +740,13 @@ class _LoginScreenState extends State<LoginScreen>
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                    auth.isDebugMode ? Icons.bug_report_rounded : Icons.verified_rounded,
+                                    auth.isDebugMode ? Icons.bolt_rounded : Icons.verified_rounded,
                                     color: auth.isDebugMode ? Colors.amberAccent : Colors.lightGreenAccent,
                                     size: 14,
                                   ),
                                   const SizedBox(width: 5),
                                   Text(
-                                    auth.isDebugMode ? 'Debug' : 'Production',
+                                    auth.isDebugMode ? 'Debug: OTP Bypass' : 'Production',
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 11,
@@ -717,6 +757,7 @@ class _LoginScreenState extends State<LoginScreen>
                               ),
                             ),
                           ),
+                          // #else (PRODUCTION)
                         ],
                       ),
                     ),
@@ -953,10 +994,43 @@ class _LoginScreenState extends State<LoginScreen>
                                       labelText: '6-Digit Email OTP Code',
                                       prefixIcon: const Icon(Icons.pin_rounded),
                                       counterText: '',
-                                      helperText: auth.isDebugMode ? 'Debug: OTP is shown in banner and auto-filled' : 'Enter OTP sent to your email inbox',
+                                      helperText: auth.isDebugMode ? 'Debug: Use Bypass OTP button or check banner' : 'Enter OTP sent to your email inbox',
                                     ),
                                     validator: (v) => (v == null || v.trim().length != 6) ? 'Enter 6-digit OTP' : null,
                                   ),
+
+                                  // ===============================================================
+                                  // #if DEBUG (Debug Mode: Only this button bypasses the OTP in UI)
+                                  // ===============================================================
+                                  if (kDebugMode && auth.isDebugMode) ...[
+                                    const SizedBox(height: 6),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: OutlinedButton.icon(
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.amber.shade900,
+                                          backgroundColor: Colors.amber.shade50,
+                                          side: BorderSide(color: Colors.amber.shade400),
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
+                                        icon: const Icon(Icons.bolt_rounded, size: 16),
+                                        label: const Text('Bypass OTP (Auto-fill 123456)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                        onPressed: () {
+                                          _regOtpController.text = '123456';
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('⚡ Debug OTP Bypassed: 123456 entered'),
+                                              backgroundColor: Color(0xFF059669),
+                                              duration: Duration(seconds: 2),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                  // #else (PRODUCTION: OTP received strictly via Email)
+
                                   const SizedBox(height: 14),
                                   DropdownButtonFormField<int>(
                                     value: _selectedDietType,
