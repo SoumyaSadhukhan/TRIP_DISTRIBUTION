@@ -21,6 +21,7 @@ class _LoginScreenState extends State<LoginScreen>
   // Login controllers
   final _loginPhoneController = TextEditingController();
   final _loginPasswordController = TextEditingController();
+  String _loginCountryCode = '+91';
 
   // Register controllers
   final _regNameController = TextEditingController();
@@ -62,6 +63,15 @@ class _LoginScreenState extends State<LoginScreen>
     try {
       final phone = await context.read<AuthProvider>().storageService.getSavedPhone();
       if (phone != null && phone.isNotEmpty && mounted) {
+        for (final code in ['+91', '+1', '+44', '+971', '+61', '+65', '+49']) {
+          if (phone.startsWith(code)) {
+            setState(() {
+              _loginCountryCode = code;
+              _loginPhoneController.text = phone.substring(code.length);
+            });
+            return;
+          }
+        }
         setState(() {
           _loginPhoneController.text = phone;
         });
@@ -104,11 +114,37 @@ class _LoginScreenState extends State<LoginScreen>
       final identifier = _loginPhoneController.text.trim();
       final password = _loginPasswordController.text;
 
-      final success = await authProvider.login(
-        identifier,
-        password,
-        email: identifier.contains('@') ? identifier : null,
-      );
+      bool success = false;
+      if (identifier.contains('@')) {
+        // Direct email login
+        success = await authProvider.login(
+          identifier,
+          password,
+          email: identifier,
+        );
+      } else {
+        // Mobile number login:
+        // 1. First check with country code + phone number (e.g. +919876543210)
+        final withCountryCode = identifier.startsWith('+')
+            ? identifier
+            : '$_loginCountryCode$identifier';
+
+        success = await authProvider.login(withCountryCode, password);
+
+        // 2. If not successful, perform fallback search using only the phone number (without country code)
+        if (!success) {
+          final cleanDigits = identifier.replaceAll(RegExp(r'\D'), '');
+          final rawPhone = cleanDigits.length >= 10
+              ? cleanDigits.substring(cleanDigits.length - 10)
+              : identifier;
+
+          if (rawPhone != withCountryCode) {
+            authProvider.clearMessages();
+            success = await authProvider.login(rawPhone, password);
+          }
+        }
+      }
+
       if (success && mounted) {
         _onLoginSuccess();
       }
@@ -969,18 +1005,72 @@ class _LoginScreenState extends State<LoginScreen>
                                   if (!_isSignUp) ...[
                                     StaggeredEntrance(
                                       delay: const Duration(milliseconds: 40),
-                                      child: TextFormField(
-                                        controller: _loginPhoneController,
-                                        keyboardType: TextInputType.emailAddress,
-                                        decoration: InputDecoration(
-                                          labelText: 'Phone Number or Email',
-                                          hintText: 'e.g. 9876543210 or user@example.com',
-                                          prefixIcon: const Icon(Icons.person_outline_rounded),
-                                          filled: true,
-                                          fillColor: Colors.white,
-                                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                                        ),
-                                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Phone number or email is required' : null,
+                                      child: Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          // Country Code Dropdown (exact same height and border)
+                                          SizedBox(
+                                            width: 115,
+                                            child: DropdownButtonFormField<String>(
+                                              value: _loginCountryCode,
+                                              decoration: InputDecoration(
+                                                labelText: 'Code',
+                                                filled: true,
+                                                fillColor: Colors.white,
+                                                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+                                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                                enabledBorder: OutlineInputBorder(
+                                                  borderRadius: BorderRadius.circular(14),
+                                                  borderSide: BorderSide(color: Colors.grey.shade300),
+                                                ),
+                                                focusedBorder: OutlineInputBorder(
+                                                  borderRadius: BorderRadius.circular(14),
+                                                  borderSide: const BorderSide(color: _primaryIndigo, width: 2),
+                                                ),
+                                              ),
+                                              icon: const Icon(Icons.arrow_drop_down_rounded, size: 20),
+                                              isExpanded: true,
+                                              items: const [
+                                                DropdownMenuItem(value: '+91', child: Text('🇮🇳 +91', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                                                DropdownMenuItem(value: '+1', child: Text('🇺🇸 +1', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                                                DropdownMenuItem(value: '+44', child: Text('🇬🇧 +44', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                                                DropdownMenuItem(value: '+971', child: Text('🇦🇪 +971', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                                                DropdownMenuItem(value: '+61', child: Text('🇦🇺 +61', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                                                DropdownMenuItem(value: '+65', child: Text('🇸🇬 +65', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                                                DropdownMenuItem(value: '+49', child: Text('🇩🇪 +49', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold))),
+                                              ],
+                                              onChanged: (val) {
+                                                if (val != null) setState(() => _loginCountryCode = val);
+                                              },
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          // Mobile Number or Email Input
+                                          Expanded(
+                                            child: TextFormField(
+                                              controller: _loginPhoneController,
+                                              keyboardType: TextInputType.text,
+                                              decoration: InputDecoration(
+                                                labelText: 'Mobile Number or Email',
+                                                hintText: 'e.g. 9876543210 or user@email.com',
+                                                prefixIcon: const Icon(Icons.phone_android_rounded),
+                                                filled: true,
+                                                fillColor: Colors.white,
+                                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                                enabledBorder: OutlineInputBorder(
+                                                  borderRadius: BorderRadius.circular(14),
+                                                  borderSide: BorderSide(color: Colors.grey.shade300),
+                                                ),
+                                                focusedBorder: OutlineInputBorder(
+                                                  borderRadius: BorderRadius.circular(14),
+                                                  borderSide: const BorderSide(color: _primaryIndigo, width: 2),
+                                                ),
+                                              ),
+                                              validator: (v) => (v == null || v.trim().isEmpty) ? 'Phone number or email is required' : null,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                     const SizedBox(height: 14),
