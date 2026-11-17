@@ -38,15 +38,21 @@ class FriendModel {
         'createdAt': createdAt?.toIso8601String(),
       };
 
-  factory FriendModel.fromJson(Map<String, dynamic> json) => FriendModel(
-        id: json['id'] ?? '',
-        userId: json['userId'] ?? '',
-        friendUserId: json['friendUserId'],
-        phone: json['phone'] ?? '',
-        name: json['name'] ?? 'Friend',
-        dietType: json['dietType'] ?? 0,
-        dietName: json['dietName'],
-        status: json['status'] ?? 'CONNECTED',
-        createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt']) : null,
-      );
+  factory FriendModel.fromJson(Map<String, dynamic> json) {
+    final rawName = (json['friendName'] ?? json['requesterName'] ?? json['name'] ?? json['fullName'] ?? json['username'] ?? '').toString().trim();
+    final rawPhone = (json['friendPhone'] ?? json['requesterPhone'] ?? json['phone'] ?? '').toString().trim();
+    final rawId = (json['connectionId'] ?? json['id'] ?? '').toString();
+
+    return FriendModel(
+      id: rawId,
+      userId: (json['userId'] ?? '').toString(),
+      friendUserId: json['friendUserId'] != null ? json['friendUserId'].toString() : null,
+      phone: rawPhone,
+      name: rawName.isNotEmpty ? rawName : (rawPhone.isNotEmpty ? rawPhone : 'Trip Member'),
+      dietType: json['dietType'] as int? ?? 0,
+      dietName: json['dietName'] as String?,
+      status: (json['status'] ?? 'CONNECTED').toString(),
+      createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt'].toString()) : null,
+    );
+  }
 }

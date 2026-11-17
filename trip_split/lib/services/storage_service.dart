@@ -14,6 +14,7 @@ class StorageService {
   static const String _userIdKey = 'saved_user_id';
   static const String _biometricPrefKey = 'saved_biometric_enabled';
   static const String _userNameKey = 'saved_user_name';
+  static const String _appEnvironmentKey = 'saved_app_environment'; // 'debug' or 'production'
 
   /// Ensures that the SharedPreferences instance is initialized
   Future<void> init() async {
@@ -66,6 +67,21 @@ class StorageService {
   Future<bool> isBiometricEnabled() async {
     await init();
     return _prefs?.getBool(_biometricPrefKey) ?? false;
+  }
+
+  Future<void> setAppEnvironment(String env) async {
+    await init();
+    await _prefs?.setString(_appEnvironmentKey, env);
+  }
+
+  Future<String> getAppEnvironment() async {
+    await init();
+    return _prefs?.getString(_appEnvironmentKey) ?? 'debug';
+  }
+
+  Future<bool> isDebugEnvironment() async {
+    final env = await getAppEnvironment();
+    return env == 'debug';
   }
 
   // --- Backward Compatibility Placeholders (No-op local storage for trip data) ---

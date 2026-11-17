@@ -49,7 +49,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     }
   }
 
-  Future<void> _acceptRequest(String connectionId) async {
+  Future<void> _acceptRequest(String connectionId, [String? requesterName]) async {
     final auth = context.read<AuthProvider>();
     final user = auth.currentUser;
     if (user == null) return;
@@ -61,9 +61,10 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     );
 
     if (mounted) {
+      final nameStr = (requesterName != null && requesterName.trim().isNotEmpty) ? requesterName.trim() : 'Member';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(res['message'] ?? 'Friend request accepted!'),
+          content: Text(res['message'] ?? 'Connected with $nameStr successfully!'),
           backgroundColor: const Color(0xFF059669),
         ),
       );
@@ -71,7 +72,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     }
   }
 
-  Future<void> _declineRequest(String connectionId) async {
+  Future<void> _declineRequest(String connectionId, [String? requesterName]) async {
     final auth = context.read<AuthProvider>();
     final user = auth.currentUser;
     if (user == null) return;
@@ -82,8 +83,9 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
     );
 
     if (mounted) {
+      final nameStr = (requesterName != null && requesterName.trim().isNotEmpty) ? requesterName.trim() : 'User';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Friend request declined.')),
+        SnackBar(content: Text('Friend request from $nameStr declined.')),
       );
       _loadData();
     }
@@ -341,6 +343,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                         itemBuilder: (context, index) {
                           final friend = _friends[index];
                           final dietColor = friend.dietEnum.color;
+                          final displayName = friend.name.trim().isNotEmpty ? friend.name.trim() : (friend.phone.isNotEmpty ? friend.phone : 'Trip Member');
 
                           return Card(
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -351,7 +354,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                                 leading: CircleAvatar(
                                   backgroundColor: _primaryIndigo.withValues(alpha: 0.12),
                                   child: Text(
-                                    friend.name.isNotEmpty ? friend.name[0].toUpperCase() : 'F',
+                                    displayName.isNotEmpty ? displayName[0].toUpperCase() : 'M',
                                     style: const TextStyle(color: _primaryIndigo, fontWeight: FontWeight.bold),
                                   ),
                                 ),
@@ -359,7 +362,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                                   children: [
                                     Flexible(
                                       child: Text(
-                                        friend.name,
+                                        displayName,
                                         style: const TextStyle(fontWeight: FontWeight.bold),
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -378,7 +381,10 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                                     ),
                                   ],
                                 ),
-                                subtitle: Text('📱 ${friend.phone}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                                subtitle: Text(
+                                  friend.phone.isNotEmpty ? '📱 ${friend.phone}' : 'Connected Trip Friend',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                ),
                                 trailing: IconButton(
                                   icon: Icon(Icons.delete_outline_rounded, color: Colors.grey.shade400, size: 20),
                                   tooltip: 'Remove Friend',
@@ -388,7 +394,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                                       builder: (ctx) => AlertDialog(
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                                         title: const Text('Remove Friend', style: TextStyle(fontWeight: FontWeight.bold)),
-                                        content: Text('Remove ${friend.name} from your trip friends?'),
+                                        content: Text('Remove $displayName from your trip friends?'),
                                         actions: [
                                           TextButton(
                                             onPressed: () => Navigator.pop(ctx, false),
@@ -426,8 +432,10 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                         itemBuilder: (context, index) {
                           final req = _requests[index];
                           final connectionId = req['id'] ?? req['connectionId'];
-                          final requesterName = req['requesterName'] ?? 'A member';
-                          final requesterPhone = req['requesterPhone'] ?? '';
+                          final requesterName = (req['requesterName'] ?? req['friendName'] ?? req['name'] ?? req['fullName'] ?? req['username'] ?? '').toString().trim().isNotEmpty
+                              ? (req['requesterName'] ?? req['friendName'] ?? req['name'] ?? req['fullName'] ?? req['username']).toString().trim()
+                              : 'Trip Member';
+                          final requesterPhone = (req['requesterPhone'] ?? req['friendPhone'] ?? req['phone'] ?? '').toString().trim();
                           final dietType = (req['dietType'] as int?) ?? 0;
                           final dietNames = ['Vegetarian', 'Non-Vegetarian', 'Non-Veg + Alcohol'];
                           final dietName = req['dietName'] ?? dietNames[dietType.clamp(0, 2)];
@@ -442,7 +450,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                                   CircleAvatar(
                                     backgroundColor: const Color(0xFF7C3AED).withValues(alpha: 0.15),
                                     child: Text(
-                                      requesterName.isNotEmpty ? requesterName[0].toUpperCase() : 'R',
+                                      requesterName.isNotEmpty ? requesterName[0].toUpperCase() : 'M',
                                       style: const TextStyle(color: Color(0xFF7C3AED), fontWeight: FontWeight.bold),
                                     ),
                                   ),
@@ -475,7 +483,10 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                                           ],
                                         ),
                                         const SizedBox(height: 2),
-                                        Text('📱 $requesterPhone', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                                        Text(
+                                          'Wants to connect as friend${requesterPhone.isNotEmpty ? ' • 📱 $requesterPhone' : ''}',
+                                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -485,12 +496,12 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
                                       IconButton(
                                         icon: const Icon(Icons.close_rounded, color: Color(0xFFEF4444)),
                                         tooltip: 'Decline',
-                                        onPressed: () => _declineRequest(connectionId),
+                                        onPressed: () => _declineRequest(connectionId, requesterName),
                                       ),
                                       IconButton(
                                         icon: const Icon(Icons.check_circle_rounded, color: Color(0xFF059669), size: 28),
                                         tooltip: 'Accept',
-                                        onPressed: () => _acceptRequest(connectionId),
+                                        onPressed: () => _acceptRequest(connectionId, requesterName),
                                       ),
                                     ],
                                   ),

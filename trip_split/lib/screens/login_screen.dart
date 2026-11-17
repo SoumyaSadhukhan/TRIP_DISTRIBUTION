@@ -144,11 +144,11 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _handleSendRegOtp() async {
-    final phone = _regPhoneController.text.trim();
-    if (phone.isEmpty || phone.length < 6) {
+    final email = _regEmailController.text.trim();
+    if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter a valid phone number first.'),
+          content: Text('Please enter a valid email address first to receive the OTP.'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -158,24 +158,48 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isOtpLoading = true);
     try {
       final authProvider = context.read<AuthProvider>();
-      final success = await authProvider.sendOtp(phone, purpose: 'REGISTER');
-      if (success && mounted && authProvider.lastSentOtp != null) {
-        _regOtpController.text = authProvider.lastSentOtp!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.mark_email_read_rounded, color: Colors.white),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text('OTP sent to $phone: ${authProvider.lastSentOtp}'),
-                ),
-              ],
+      final isDebug = authProvider.isDebugMode;
+      final success = await authProvider.sendOtp(
+        null,
+        email: email,
+        phone: _regPhoneController.text.trim(),
+        purpose: 'REGISTER',
+      );
+      if (success && mounted) {
+        if (isDebug && authProvider.lastSentOtp != null) {
+          _regOtpController.text = authProvider.lastSentOtp!;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.bug_report_rounded, color: Colors.amberAccent),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text('Debug Mode OTP: ${authProvider.lastSentOtp}'),
+                  ),
+                ],
+              ),
+              backgroundColor: const Color(0xFF059669),
+              duration: const Duration(seconds: 6),
             ),
-            backgroundColor: const Color(0xFF059669),
-            duration: const Duration(seconds: 5),
-          ),
-        );
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.mark_email_read_rounded, color: Colors.white),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text('Verification OTP sent to $email. Please check your inbox.'),
+                  ),
+                ],
+              ),
+              backgroundColor: const Color(0xFF4F46E5),
+              duration: const Duration(seconds: 6),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -236,7 +260,8 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   void _showForgotPasswordSheet() {
-    final phoneCtrl = TextEditingController(text: _loginPhoneController.text);
+    final initialEmail = _loginPhoneController.text.contains('@') ? _loginPhoneController.text : '';
+    final emailCtrl = TextEditingController(text: initialEmail);
     final otpCtrl = TextEditingController();
     final newPassCtrl = TextEditingController();
     final confirmPassCtrl = TextEditingController();
@@ -250,7 +275,9 @@ class _LoginScreenState extends State<LoginScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => StatefulBuilder(
-        builder: (context, setSheetState) => Container(
+        builder: (context, setSheetState) {
+          final isDebug = context.watch<AuthProvider>().isDebugMode;
+          return Container(
           padding: EdgeInsets.only(
             top: 24,
             left: 24,
@@ -289,31 +316,42 @@ class _LoginScreenState extends State<LoginScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Enter your registered phone number to receive an OTP and set a new password.',
+                  'Enter your registered email address to receive an OTP and set a new password.',
                   style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                 ),
                 const SizedBox(height: 20),
 
-                // Phone field
+                // Email field
                 TextField(
-                  controller: phoneCtrl,
-                  keyboardType: TextInputType.phone,
+                  controller: emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
-                    labelText: 'Phone Number',
-                    prefixIcon: const Icon(Icons.phone_android_rounded),
+                    labelText: 'Registered Email Address',
+                    hintText: 'e.g. user@example.com',
+                    prefixIcon: const Icon(Icons.email_outlined),
                     suffixIcon: TextButton(
                       onPressed: () async {
+                        final mail = emailCtrl.text.trim();
+                        if (mail.isEmpty || !mail.contains('@')) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Please enter a valid email address')),
+                          );
+                          return;
+                        }
                         try {
                           final auth = context.read<AuthProvider>();
                           final success = await auth.sendOtp(
-                            phoneCtrl.text.trim(),
+                            null,
+                            email: mail,
                             purpose: 'FORGOT_PASSWORD',
                           );
                           if (success) {
                             setSheetState(() {
                               otpSent = true;
-                              localOtp = auth.lastSentOtp;
-                              if (localOtp != null) otpCtrl.text = localOtp!;
+                              if (isDebug && auth.lastSentOtp != null) {
+                                localOtp = auth.lastSentOtp;
+                                otpCtrl.text = localOtp!;
+                              }
                             });
                           }
                         } catch (_) {}
@@ -322,7 +360,7 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
                 ),
-                if (localOtp != null) ...[
+                if (isDebug && localOtp != null) ...[
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -332,8 +370,22 @@ class _LoginScreenState extends State<LoginScreen>
                       border: Border.all(color: Colors.green.shade200),
                     ),
                     child: Text(
-                      'OTP Code: $localOtp',
+                      'Debug Mode OTP: $localOtp',
                       style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ),
+                ] else if (otpSent) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.shade200),
+                    ),
+                    child: const Text(
+                      'Reset code sent to your email. Check inbox/spam folder.',
+                      style: TextStyle(color: _primaryIndigo, fontSize: 12, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -387,7 +439,7 @@ class _LoginScreenState extends State<LoginScreen>
                       try {
                         final auth = context.read<AuthProvider>();
                         final ok = await auth.resetPassword(
-                          phone: phoneCtrl.text.trim(),
+                          email: emailCtrl.text.trim(),
                           otp: otpCtrl.text.trim(),
                           newPassword: newPassCtrl.text,
                           confirmPassword: confirmPassCtrl.text,
@@ -421,227 +473,163 @@ class _LoginScreenState extends State<LoginScreen>
               ],
             ),
           ),
-        ),
+        );
+        },
       ),
     );
   }
 
-  void _showServerConfigSheet() async {
-    final apiService = context.read<AuthProvider>().apiService;
-    final currentIp = await apiService.getCustomServerIp() ?? '';
-    final ipCtrl = TextEditingController(text: currentIp.isEmpty ? '10.130.176.248' : currentIp);
-    String testStatus = '';
-    bool testing = false;
-
-    if (!mounted) return;
-
+  void _showEnvironmentSheet() {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => StatefulBuilder(
-        builder: (context, setSheetState) => Container(
-          padding: EdgeInsets.only(
-            top: 24,
-            left: 24,
-            right: 24,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-          ),
+      builder: (sheetCtx) {
+        final auth = context.watch<AuthProvider>();
+        return Container(
+          padding: const EdgeInsets.all(24),
           decoration: const BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                const SizedBox(height: 18),
-                const Row(
-                  children: [
-                    Icon(Icons.dns_rounded, color: _primaryIndigo, size: 26),
-                    SizedBox(width: 10),
-                    Text(
-                      'API Server Config & IP',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Current Active Base URL: ${apiService.baseUrl}',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _primaryIndigo),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Enter your Host PC IP Address and Port:',
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                ),
-                const SizedBox(height: 14),
-                const Text(
-                  'Quick Host Presets:',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    '10.130.176.248',
-                    'localhost',
-                    '127.0.0.1',
-                    '10.0.2.2',
-                    '192.168.1.111',
-                  ].map((host) => ActionChip(
-                    avatar: Icon(
-                      host == 'localhost' || host == '127.0.0.1' ? Icons.laptop_rounded : Icons.wifi_rounded,
-                      size: 14,
-                      color: _primaryIndigo,
-                    ),
-                    label: Text(host, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                    onPressed: () {
-                      setSheetState(() {
-                        final currentPort = ipCtrl.text.contains(':') ? ipCtrl.text.split(':').last : '5000';
-                        ipCtrl.text = '$host:$currentPort';
-                        testStatus = '';
-                      });
-                    },
-                  )).toList(),
-                ),
-                const SizedBox(height: 14),
-                const Text(
-                  'Quick Port Selectors:',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    '5000',
-                    '5246',
-                    '7266',
-                    '8080',
-                  ].map((port) => ActionChip(
-                    avatar: const Icon(Icons.numbers_rounded, size: 14, color: _primaryIndigo),
-                    label: Text('Port $port', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                    onPressed: () {
-                      setSheetState(() {
-                        final host = ipCtrl.text.contains(':') ? ipCtrl.text.split(':').first : (ipCtrl.text.isEmpty ? '10.130.176.248' : ipCtrl.text);
-                        ipCtrl.text = '$host:$port';
-                        testStatus = '';
-                      });
-                    },
-                  )).toList(),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: ipCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'API Server IP : Port',
-                    hintText: 'e.g. 10.130.176.248:5000 or localhost:5246',
-                    prefixIcon: const Icon(Icons.computer_rounded),
-                    suffixIcon: TextButton(
-                      onPressed: testing ? null : () async {
-                        setSheetState(() {
-                          testing = true;
-                          testStatus = 'Connecting to ASP.NET Core API...';
-                        });
-                        try {
-                          final ok = await apiService.testConnection(ipCtrl.text.trim());
-                          setSheetState(() {
-                            testing = false;
-                            testStatus = ok
-                                ? 'Connected to ASP.NET Core Web API successfully!'
-                                : 'Could not connect. Check PC firewall & active API port.';
-                          });
-                        } catch (e) {
-                          setSheetState(() {
-                            testing = false;
-                            testStatus = 'Error: $e';
-                          });
-                        }
-                      },
-                      child: testing
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('Test Connection'),
-                    ),
-                  ),
-                ),
-                if (testStatus.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: testStatus.contains('successfully') ? Colors.green.shade50 : Colors.orange.shade50,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: testStatus.contains('successfully') ? Colors.green.shade300 : Colors.orange.shade300,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          testStatus.contains('successfully') ? Icons.check_circle : Icons.warning_amber_rounded,
-                          color: testStatus.contains('successfully') ? Colors.green.shade700 : Colors.orange.shade800,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            testStatus,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: testStatus.contains('successfully') ? Colors.green.shade900 : Colors.orange.shade900,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+              ),
+              const SizedBox(height: 18),
+              const Row(
+                children: [
+                  Icon(Icons.tune_rounded, color: _primaryIndigo, size: 24),
+                  SizedBox(width: 10),
+                  Text(
+                    'App Environment Setup',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                   ),
                 ],
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    icon: const Icon(Icons.save_rounded),
-                    label: const Text('Save & Apply IP Config'),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Select between Debug Mode (OTP in UI) and Production Mode (OTP via Email).',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 16),
+
+              // Option 1: Debug Mode
+              InkWell(
+                onTap: () async {
+                  await auth.setEnvironment('debug');
+                  if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: auth.isDebugMode ? Colors.amber.shade50 : Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: auth.isDebugMode ? Colors.amber.shade600 : Colors.grey.shade300,
+                      width: auth.isDebugMode ? 2 : 1,
                     ),
-                    onPressed: () async {
-                      try {
-                        await apiService.setCustomServerIp(ipCtrl.text.trim());
-                        if (mounted) {
-                          Navigator.pop(sheetCtx);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Active API Base URL set to ${apiService.baseUrl}'),
-                              backgroundColor: Colors.green.shade700,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade100,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.bug_report_rounded, color: Colors.amber, size: 24),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Debug Mode (QA / Testing)',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                             ),
-                          );
-                        }
-                      } catch (_) {}
-                    },
+                            const SizedBox(height: 2),
+                            Text(
+                              'OTP will show in login UI banners and auto-fill for instant testing.',
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (auth.isDebugMode)
+                        const Icon(Icons.check_circle_rounded, color: Colors.amber, size: 22),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 12),
+
+              // Option 2: Production Mode
+              InkWell(
+                onTap: () async {
+                  await auth.setEnvironment('production');
+                  if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: !auth.isDebugMode ? Colors.green.shade50 : Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: !auth.isDebugMode ? Colors.green.shade600 : Colors.grey.shade300,
+                      width: !auth.isDebugMode ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade100,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.verified_rounded, color: Colors.green, size: 24),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Production Mode',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'OTP will be sent strictly through Mail. No OTP displayed in UI.',
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (!auth.isDebugMode)
+                        const Icon(Icons.check_circle_rounded, color: Colors.green, size: 22),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -698,17 +686,36 @@ class _LoginScreenState extends State<LoginScreen>
                               ],
                             ),
                           ),
-                          IconButton(
-                            icon: Container(
-                              padding: const EdgeInsets.all(8),
+                          InkWell(
+                            onTap: _showEnvironmentSheet,
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
                                 color: Colors.white.withValues(alpha: 0.18),
-                                borderRadius: BorderRadius.circular(10),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
                               ),
-                              child: const Icon(Icons.wifi_tethering_rounded, color: Colors.white, size: 20),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    auth.isDebugMode ? Icons.bug_report_rounded : Icons.verified_rounded,
+                                    color: auth.isDebugMode ? Colors.amberAccent : Colors.lightGreenAccent,
+                                    size: 14,
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    auth.isDebugMode ? 'Debug' : 'Production',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            tooltip: 'Server & Wi-Fi Settings',
-                            onPressed: _showServerConfigSheet,
                           ),
                         ],
                       ),
@@ -733,7 +740,7 @@ class _LoginScreenState extends State<LoginScreen>
                             const SizedBox(height: 2),
                             Text(
                               _isSignUp
-                                  ? 'Verify phone via OTP & store in SQL database'
+                                  ? 'Verify email via OTP & create your account'
                                   : 'Sign in to access your synchronized trips',
                               style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12),
                             ),
@@ -905,25 +912,10 @@ class _LoginScreenState extends State<LoginScreen>
                                   TextFormField(
                                     controller: _regEmailController,
                                     keyboardType: TextInputType.emailAddress,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Email Address',
-                                      hintText: 'e.g. testuser@example.com',
-                                      prefixIcon: Icon(Icons.email_outlined),
-                                    ),
-                                    validator: (v) {
-                                      if (v != null && v.trim().isNotEmpty && (!v.contains('@') || !v.contains('.'))) {
-                                        return 'Enter a valid email address';
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                  const SizedBox(height: 14),
-                                  TextFormField(
-                                    controller: _regPhoneController,
-                                    keyboardType: TextInputType.phone,
                                     decoration: InputDecoration(
-                                      labelText: 'Phone Number',
-                                      prefixIcon: const Icon(Icons.phone_android_rounded),
+                                      labelText: 'Email Address (for OTP & Account)',
+                                      hintText: 'e.g. testuser@example.com',
+                                      prefixIcon: const Icon(Icons.email_outlined),
                                       suffixIcon: Padding(
                                         padding: const EdgeInsets.only(right: 6),
                                         child: TextButton(
@@ -934,6 +926,22 @@ class _LoginScreenState extends State<LoginScreen>
                                         ),
                                       ),
                                     ),
+                                    validator: (v) {
+                                      if (v == null || v.trim().isEmpty) return 'Email is required';
+                                      if (!v.contains('@') || !v.contains('.')) return 'Enter a valid email address';
+                                      return null;
+                                    },
+                                  ),
+                                  const SizedBox(height: 14),
+                                  TextFormField(
+                                    controller: _regPhoneController,
+                                    keyboardType: TextInputType.phone,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Phone Number (for friends to find you)',
+                                      hintText: 'e.g. 9876543210',
+                                      prefixIcon: Icon(Icons.phone_android_rounded),
+                                      helperText: 'Phone number is only used for adding trip friends',
+                                    ),
                                     validator: (v) => (v == null || v.trim().isEmpty) ? 'Phone number is required' : null,
                                   ),
                                   const SizedBox(height: 14),
@@ -941,10 +949,11 @@ class _LoginScreenState extends State<LoginScreen>
                                     controller: _regOtpController,
                                     keyboardType: TextInputType.number,
                                     maxLength: 6,
-                                    decoration: const InputDecoration(
-                                      labelText: '6-Digit OTP Code',
-                                      prefixIcon: Icon(Icons.pin_rounded),
+                                    decoration: InputDecoration(
+                                      labelText: '6-Digit Email OTP Code',
+                                      prefixIcon: const Icon(Icons.pin_rounded),
                                       counterText: '',
+                                      helperText: auth.isDebugMode ? 'Debug: OTP is shown in banner and auto-filled' : 'Enter OTP sent to your email inbox',
                                     ),
                                     validator: (v) => (v == null || v.trim().length != 6) ? 'Enter 6-digit OTP' : null,
                                   ),

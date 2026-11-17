@@ -288,6 +288,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final username = (auth.currentUser?.fullName != null && auth.currentUser!.fullName.isNotEmpty)
         ? auth.currentUser!.fullName
         : (auth.currentUser?.username ?? 'User');
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isNarrow = screenWidth < 380;
 
     return Scaffold(
       body: RefreshIndicator(
@@ -307,8 +309,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 GestureDetector(
                   onTap: () => _showApiStatusDialog(context),
                   child: Container(
-                    margin: const EdgeInsets.only(right: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    margin: EdgeInsets.only(right: isNarrow ? 2 : 6),
+                    padding: EdgeInsets.symmetric(horizontal: isNarrow ? 6 : 10, vertical: 5),
                     decoration: BoxDecoration(
                       color: _isSyncing
                           ? Colors.blue.withValues(alpha: 0.3)
@@ -340,11 +342,11 @@ class _HomeScreenState extends State<HomeScreen> {
                               color: _isApiConnected ? Colors.greenAccent : Colors.amberAccent,
                             ),
                           ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 4),
                         Text(
                           _isSyncing
-                              ? 'Syncing DB...'
-                              : (_isApiConnected ? 'SQL DB Live' : 'Phone Storage'),
+                              ? 'Syncing'
+                              : (_isApiConnected ? (isNarrow ? 'Live' : 'SQL DB Live') : (isNarrow ? 'Local' : 'Phone Storage')),
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 10,
@@ -356,16 +358,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 IconButton(
+                  padding: EdgeInsets.all(isNarrow ? 4 : 8),
+                  constraints: isNarrow ? const BoxConstraints(minWidth: 36, minHeight: 36) : null,
                   icon: Stack(
                     clipBehavior: Clip.none,
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: EdgeInsets.all(isNarrow ? 6 : 8),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.18),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 20),
+                        child: Icon(Icons.notifications_none_rounded, color: Colors.white, size: isNarrow ? 18 : 20),
                       ),
                       if (_unreadNotifs > 0)
                         Positioned(
@@ -398,13 +402,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
                 IconButton(
+                  padding: EdgeInsets.all(isNarrow ? 4 : 8),
+                  constraints: isNarrow ? const BoxConstraints(minWidth: 36, minHeight: 36) : null,
                   icon: Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: EdgeInsets.all(isNarrow ? 6 : 8),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.people_alt_rounded, color: Colors.white, size: 20),
+                    child: Icon(Icons.people_alt_rounded, color: Colors.white, size: isNarrow ? 18 : 20),
                   ),
                   tooltip: 'Trip Friends',
                   onPressed: () => Navigator.push(
@@ -413,13 +419,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 IconButton(
+                  padding: EdgeInsets.all(isNarrow ? 4 : 8),
+                  constraints: isNarrow ? const BoxConstraints(minWidth: 36, minHeight: 36) : null,
                   icon: Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: EdgeInsets.all(isNarrow ? 6 : 8),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.account_circle_outlined, color: Colors.white, size: 20),
+                    child: Icon(Icons.account_circle_outlined, color: Colors.white, size: isNarrow ? 18 : 20),
                   ),
                   tooltip: 'My Profile & Diet',
                   onPressed: () => Navigator.push(
@@ -428,18 +436,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 IconButton(
+                  padding: EdgeInsets.all(isNarrow ? 4 : 8),
+                  constraints: isNarrow ? const BoxConstraints(minWidth: 36, minHeight: 36) : null,
                   icon: Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: EdgeInsets.all(isNarrow ? 6 : 8),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.logout_rounded, color: Colors.white, size: 20),
+                    child: Icon(Icons.logout_rounded, color: Colors.white, size: isNarrow ? 18 : 20),
                   ),
                   tooltip: 'Log Out',
                   onPressed: () => _confirmLogout(context),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: isNarrow ? 4 : 8),
               ],
             flexibleSpace: FlexibleSpaceBar(
               titlePadding: const EdgeInsets.only(left: 20, bottom: 16),

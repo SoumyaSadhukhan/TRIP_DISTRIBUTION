@@ -1,6 +1,6 @@
 // lib/services/api_service.dart
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/activity_log.dart';
@@ -310,6 +310,7 @@ class ApiService {
     String? email,
     String? userId,
     String purpose = 'REGISTER',
+    String? environment,
     String? token,
   }) async {
     try {
@@ -319,6 +320,7 @@ class ApiService {
           if (phone != null && phone.isNotEmpty) 'phone': phone,
           if (email != null && email.isNotEmpty) 'email': email,
           if (userId != null && userId.isNotEmpty) 'userId': userId,
+          if (environment != null && environment.isNotEmpty) 'environment': environment,
           'purpose': purpose,
         },
         token,
@@ -373,7 +375,8 @@ class ApiService {
 
   /// API 6: POST /api/Auth/reset-password
   Future<Map<String, dynamic>> resetPassword({
-    required String phone,
+    String? phone,
+    String? email,
     required String otp,
     required String newPassword,
     String? token,
@@ -382,7 +385,8 @@ class ApiService {
       final response = await _smartPost(
         '/Auth/reset-password',
         {
-          'phone': phone,
+          if (phone != null && phone.isNotEmpty) 'phone': phone,
+          if (email != null && email.isNotEmpty) 'email': email,
           'otpCode': otp,
           'newPassword': newPassword,
         },

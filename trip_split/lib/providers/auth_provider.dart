@@ -18,6 +18,9 @@ class AuthProvider extends ChangeNotifier {
   String? _errorMessage;
   String? _successMessage;
 
+  // Environment state (debug vs production)
+  String _environment = 'debug';
+
   // OTP state helpers for UI
   String? _lastSentOtp;
   bool _isOtpSent = false;
@@ -30,6 +33,13 @@ class AuthProvider extends ChangeNotifier {
   })  : _storageService = storageService ?? StorageService(),
         _apiService = apiService ?? ApiService(),
         _biometricService = biometricService ?? BiometricService() {
+    _initEnvironmentAndLogin();
+  }
+
+  Future<void> _initEnvironmentAndLogin() async {
+    try {
+      _environment = await _storageService.getAppEnvironment();
+    } catch (_) {}
     checkPersistentLogin();
   }
 
@@ -43,9 +53,17 @@ class AuthProvider extends ChangeNotifier {
   String? get lastSentOtp => _lastSentOtp;
   bool get isOtpSent => _isOtpSent;
   int get otpCountdown => _otpCountdown;
+  String get environment => _environment;
+  bool get isDebugMode => _environment == 'debug';
   StorageService get storageService => _storageService;
   ApiService get apiService => _apiService;
   BiometricService get biometricService => _biometricService;
+
+  Future<void> setEnvironment(String env) async {
+    _environment = env;
+    await _storageService.setAppEnvironment(env);
+    notifyListeners();
+  }
 
   void clearMessages() {
     _errorMessage = null;
@@ -112,11 +130,24 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  /// Sends OTP to phone number for Registration or Forgot Password
-  Future<bool> sendOtp(String phone, {String purpose = 'REGISTER'}) async {
-    final cleanPhone = phone.trim();
-    if (cleanPhone.isEmpty || cleanPhone.length < 6) {
-      _errorMessage = 'Please enter a valid phone number';
+  /// Sends OTP to email or phone number for Registration or Forgot Password
+  Future<bool> sendOtp(
+    String? identifier, {
+    String? email,
+    String? phone,
+    String purpose = 'REGISTER',
+  }) async {
+    final effectiveEmail = email ?? (identifier != null && identifier.contains('@') ? identifier.trim() : null);
+    final effectivePhone = phone ?? (identifier != null && !identifier.contains('@') ? identifier.trim() : null);
+
+    if ((effectiveEmail == null || effectiveEmail.isEmpty) && (effectivePhone == null || effectivePhone.isEmpty)) {
+      _errorMessage = 'Please enter a valid email address';
+      notifyListeners();
+      return false;
+    }
+
+    if (effectiveEmail != null && effectiveEmail.isNotEmpty && (!effectiveEmail.contains('@') || !effectiveEmail.contains('.'))) {
+      _errorMessage = 'Please enter a valid email address';
       notifyListeners();
       return false;
     }
@@ -126,13 +157,20 @@ class AuthProvider extends ChangeNotifier {
     _successMessage = null;
     notifyListeners();
 
-    final res = await _apiService.sendOtp(phone: cleanPhone, purpose: purpose);
+    final res = await _apiService.sendOtp(
+      email: effectiveEmail,
+      phone: effectivePhone,
+      purpose: purpose,
+      environment: _environment,
+    );
     _isLoading = false;
 
     if (res['success'] == true) {
       _isOtpSent = true;
-      _lastSentOtp = res['otp']; // Stored for display banner / auto-fill in testing
-      _successMessage = res['message'] ?? 'OTP sent successfully!';
+      _lastSentOtp = res['otp']; // Stored for display banner / auto-fill in testing (in debug mode)
+      _successMessage = res['message'] ?? (isDebugMode && _lastSentOtp != null
+          ? 'OTP: $_lastSentOtp'
+          : 'Verification code sent to ${effectiveEmail ?? effectivePhone}. Please check your inbox.');
       notifyListeners();
       return true;
     } else {
@@ -394,11 +432,20 @@ class AuthProvider extends ChangeNotifier {
 
   /// Reset Password via verified OTP
   Future<bool> resetPassword({
-    required String phone,
+    String? email,
+    String? phone,
     required String otp,
     required String newPassword,
     required String confirmPassword,
   }) async {
+    final cleanEmail = email?.trim();
+    final cleanPhone = phone?.trim();
+
+    if ((cleanEmail == null || cleanEmail.isEmpty) && (cleanPhone == null || cleanPhone.isEmpty)) {
+      _errorMessage = 'Please enter your registered email address';
+      notifyListeners();
+      return false;
+    }
     if (newPassword.length < 4) {
       _errorMessage = 'Password must be at least 4 characters long';
       notifyListeners();
@@ -415,7 +462,8 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     final res = await _apiService.resetPassword(
-      phone: phone.trim(),
+      email: cleanEmail,
+      phone: cleanPhone,
       otp: otp.trim(),
       newPassword: newPassword,
     );
