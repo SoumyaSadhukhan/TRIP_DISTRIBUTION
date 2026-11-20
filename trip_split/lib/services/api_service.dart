@@ -1355,6 +1355,40 @@ class ApiService {
     }
   }
 
+  /// Accept Trip Invitation: POST /api/Collaborators/trip/{tripId}/accept
+  Future<Map<String, dynamic>> acceptTripInvite({
+    required String tripId,
+    String? token,
+  }) async {
+    try {
+      final response = await _smartPost('/Collaborators/trip/$tripId/accept', null, token);
+      final data = jsonDecode(response.body);
+      return {
+        'success': response.statusCode == 200 && (data['success'] == true || data['success'] == null),
+        'message': data['message'] ?? 'Joined trip successfully',
+      };
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  /// Decline Trip Invitation: POST /api/Collaborators/trip/{tripId}/decline
+  Future<Map<String, dynamic>> declineTripInvite({
+    required String tripId,
+    String? token,
+  }) async {
+    try {
+      final response = await _smartPost('/Collaborators/trip/$tripId/decline', null, token);
+      final data = jsonDecode(response.body);
+      return {
+        'success': response.statusCode == 200 && (data['success'] == true || data['success'] == null),
+        'message': data['message'] ?? 'Trip invitation declined',
+      };
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
   // =========================================================================
   // 9. NOTIFICATIONS CONTROLLER (APIs 50-53)
   // =========================================================================

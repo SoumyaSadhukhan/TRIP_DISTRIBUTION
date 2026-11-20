@@ -5,7 +5,8 @@ import '../models/friend.dart';
 import '../providers/auth_provider.dart';
 
 class FriendsScreen extends StatefulWidget {
-  const FriendsScreen({super.key});
+  final int initialTab;
+  const FriendsScreen({super.key, this.initialTab = 0});
 
   @override
   State<FriendsScreen> createState() => _FriendsScreenState();
@@ -22,7 +23,7 @@ class _FriendsScreenState extends State<FriendsScreen> with SingleTickerProvider
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 2, vsync: this, initialIndex: widget.initialTab.clamp(0, 1));
     _loadData();
   }
 

@@ -415,19 +415,19 @@ class AuthProvider extends ChangeNotifier {
       userId: _currentUser!.id,
       fullName: fullName.trim(),
       dietType: dietType,
+      dietName: dietName,
       token: token,
     );
 
-    if (res['success'] == true && res['user'] != null) {
-      final user = res['user'] as UserModel;
-      _currentUser = _currentUser!.copyWith(
-        fullName: user.fullName,
-        dietType: user.dietType,
-        dietName: user.dietName,
-      );
-      notifyListeners();
-      return true;
-    }
+    // 3. Also call dedicated diet update endpoint to guarantee DB table reflection
+    await _apiService.updateDiet(
+      dietType: dietType,
+      dietName: dietName,
+      token: token,
+    );
+
+    // 4. Persist updated user locally
+    await _storageService.saveUser(_currentUser!);
 
     return res['success'] == true;
   }

@@ -840,9 +840,14 @@ class _GroupCard extends StatelessWidget {
   void _showPersonDialog(BuildContext context, {Person? personToEdit}) {
     final isEditing = personToEdit != null;
     final nameController = TextEditingController(text: isEditing ? personToEdit.name : '');
+    final phoneController = TextEditingController(text: isEditing ? (personToEdit.phone ?? '') : '');
+    String countryCode = '+91';
     DietType selectedDiet = isEditing ? personToEdit.dietType : DietType.nonVegetarian;
     String? linkedUserId = isEditing ? personToEdit.userId : null;
     String? linkedPhone = isEditing ? personToEdit.phone : null;
+    bool isSearching = false;
+    String searchStatus = '';
+    bool searchSuccess = false;
 
     showModalBottomSheet(
       context: context,
@@ -900,9 +905,14 @@ class _GroupCard extends StatelessWidget {
                         if (u != null) {
                           setState(() {
                             nameController.text = u.fullName;
+                            phoneController.text = u.phone.startsWith('+91')
+                                ? u.phone.substring(3)
+                                : (u.phone.startsWith('+') ? u.phone.replaceFirst(RegExp(r'^\+\d+'), '') : u.phone);
                             linkedPhone = u.phone;
                             linkedUserId = u.id;
                             selectedDiet = DietType.values[u.dietType.clamp(0, DietType.values.length - 1)];
+                            searchStatus = '✓ Added Yourself: ${u.fullName} (${selectedDiet.label})';
+                            searchSuccess = true;
                           });
                         }
                       },
@@ -912,15 +922,162 @@ class _GroupCard extends StatelessWidget {
                       onFriendSelected: (name, phone, userId, dietType) {
                         setState(() {
                           nameController.text = name;
+                          phoneController.text = phone.startsWith('+91')
+                              ? phone.substring(3)
+                              : (phone.startsWith('+') ? phone.replaceFirst(RegExp(r'^\+\d+'), '') : phone);
                           linkedPhone = phone;
                           linkedUserId = userId;
                           selectedDiet = DietType.values[dietType.clamp(0, DietType.values.length - 1)];
+                          searchStatus = '✓ Selected Friend: $name (${selectedDiet.label})';
+                          searchSuccess = true;
                         });
                       },
                     ),
+                    const SizedBox(height: 14),
+
+                    // ── Search Existing User / Friend by Phone Section ──
+                    Text(
+                      'Search Existing User / Friend by Phone',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.grey.shade700),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          height: 52,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF9FAFB),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: countryCode,
+                              items: const [
+                                DropdownMenuItem(value: '+91', child: Text('+91', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                                DropdownMenuItem(value: '+1', child: Text('+1', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                                DropdownMenuItem(value: '+44', child: Text('+44', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                                DropdownMenuItem(value: '+61', child: Text('+61', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                                DropdownMenuItem(value: '+971', child: Text('+971', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                              ],
+                              onChanged: (val) {
+                                if (val != null) setState(() => countryCode = val);
+                              },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: SizedBox(
+                            height: 52,
+                            child: TextField(
+                              controller: phoneController,
+                              keyboardType: TextInputType.phone,
+                              decoration: InputDecoration(
+                                hintText: 'Enter Phone Number',
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                prefixIcon: const Icon(Icons.phone_iphone_rounded, size: 20),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          height: 52,
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF4F46E5),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                            ),
+                            onPressed: isSearching
+                                ? null
+                                : () async {
+                                    final raw = phoneController.text.trim();
+                                    if (raw.length < 6) {
+                                      setState(() {
+                                        searchStatus = 'Please enter at least 6 digits';
+                                        searchSuccess = false;
+                                      });
+                                      return;
+                                    }
+                                    setState(() {
+                                      isSearching = true;
+                                      searchStatus = 'Searching user database...';
+                                    });
+                                    final auth = context.read<AuthProvider>();
+                                    final full = '$countryCode$raw';
+                                    var res = await auth.apiService.searchUsers(full, token: auth.currentUser?.token);
+                                    if (res.isEmpty && raw != full) {
+                                      res = await auth.apiService.searchUsers(raw, token: auth.currentUser?.token);
+                                    }
+                                    if (res.isNotEmpty) {
+                                      final user = res.first;
+                                      final dType = user['dietType'] as int? ?? 0;
+                                      setState(() {
+                                        isSearching = false;
+                                        searchSuccess = true;
+                                        nameController.text = user['fullName'] ?? '';
+                                        linkedUserId = user['userId'];
+                                        linkedPhone = user['phone'] ?? full;
+                                        selectedDiet = DietType.values[dType.clamp(0, DietType.values.length - 1)];
+                                        searchStatus = '✓ User found: ${user['fullName']} (${selectedDiet.label})';
+                                      });
+                                    } else {
+                                      setState(() {
+                                        isSearching = false;
+                                        searchSuccess = false;
+                                        linkedUserId = null;
+                                        linkedPhone = full;
+                                        searchStatus = 'ℹ Unregistered phone. You can enter a name and add directly.';
+                                      });
+                                    }
+                                  },
+                            icon: isSearching
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.search_rounded, size: 18),
+                            label: const Text('Search', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (searchStatus.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: searchSuccess ? Colors.green.shade50 : const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: searchSuccess ? Colors.green.shade200 : const Color(0xFFBFDBFE)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              searchSuccess ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+                              size: 16,
+                              color: searchSuccess ? Colors.green.shade700 : const Color(0xFF1D4ED8),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                searchStatus,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: searchSuccess ? Colors.green.shade800 : const Color(0xFF1E40AF),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
 
-                  if (!isEditing) const SizedBox(height: 12),
+                  if (!isEditing) const SizedBox(height: 14),
 
                   TextField(
                     controller: nameController,
@@ -996,12 +1153,25 @@ class _GroupCard extends StatelessWidget {
                               );
                               Navigator.pop(context);
                             } else {
+                              final auth = context.read<AuthProvider>();
+                              final currentUserId = auth.currentUser?.id;
+                              final finalPhone = linkedPhone ?? (phoneController.text.trim().isNotEmpty ? '$countryCode${phoneController.text.trim()}' : null);
+
                               final success = await context.read<TripProvider>().addPerson(
                                 tripId, group.id, name, selectedDiet,
-                                userId: linkedUserId, phone: linkedPhone,
+                                userId: linkedUserId, phone: finalPhone,
                               );
                               if (success && context.mounted) {
                                 Navigator.pop(context);
+                                final isFriendInvite = linkedUserId != null && linkedUserId != currentUserId;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(isFriendInvite
+                                        ? 'Member "$name" added! Trip join invitation sent.'
+                                        : 'Member "$name" added to ${group.name}.'),
+                                    backgroundColor: const Color(0xFF059669),
+                                  ),
+                                );
                               } else if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
@@ -1584,29 +1754,129 @@ class _CollaboratorsBottomSheetState extends State<_CollaboratorsBottomSheet> {
     if (user == null) return;
 
     final phoneController = TextEditingController();
+    String countryCode = '+91';
     String selectedRole = 'MEMBER';
+    bool isSearching = false;
+    String searchStatus = '';
+    String? resolvedUserId;
+    String? resolvedName;
 
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Invite Collaborator'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Invite Collaborator', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(
-                controller: phoneController,
-                decoration: const InputDecoration(
-                  labelText: 'Phone Number or User ID',
-                  hintText: 'e.g. 9876543210',
-                  prefixIcon: Icon(Icons.phone_rounded),
-                ),
-                keyboardType: TextInputType.phone,
+              const Text('Enter phone number to search user:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    height: 50,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9FAFB),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: countryCode,
+                        items: const [
+                          DropdownMenuItem(value: '+91', child: Text('+91', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                          DropdownMenuItem(value: '+1', child: Text('+1', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                          DropdownMenuItem(value: '+44', child: Text('+44', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                          DropdownMenuItem(value: '+61', child: Text('+61', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                          DropdownMenuItem(value: '+971', child: Text('+971', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) setDialogState(() => countryCode = val);
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: SizedBox(
+                      height: 50,
+                      child: TextField(
+                        controller: phoneController,
+                        decoration: InputDecoration(
+                          hintText: 'Phone Number',
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        keyboardType: TextInputType.phone,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 50,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF4F46E5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                      ),
+                      onPressed: isSearching
+                          ? null
+                          : () async {
+                              final raw = phoneController.text.trim();
+                              if (raw.length < 6) return;
+                              setDialogState(() {
+                                isSearching = true;
+                                searchStatus = 'Searching...';
+                              });
+                              final full = '$countryCode$raw';
+                              var res = await auth.apiService.searchUsers(full, token: user.token);
+                              if (res.isEmpty && raw != full) {
+                                res = await auth.apiService.searchUsers(raw, token: user.token);
+                              }
+                              setDialogState(() {
+                                isSearching = false;
+                                if (res.isNotEmpty) {
+                                  resolvedUserId = res.first['userId'];
+                                  resolvedName = res.first['fullName'];
+                                  searchStatus = '✓ Found: $resolvedName';
+                                } else {
+                                  resolvedUserId = null;
+                                  resolvedName = null;
+                                  searchStatus = 'ℹ Unregistered. Will send invitation.';
+                                }
+                              });
+                            },
+                      child: isSearching
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.search_rounded, size: 18),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
+              if (searchStatus.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  searchStatus,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: searchStatus.startsWith('✓') ? Colors.green.shade700 : Colors.blue.shade700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 14),
               DropdownButtonFormField<String>(
                 value: selectedRole,
-                decoration: const InputDecoration(labelText: 'Role'),
+                decoration: InputDecoration(
+                  labelText: 'Role',
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
                 items: const [
                   DropdownMenuItem(value: 'MEMBER', child: Text('Member (Can add/edit)')),
                   DropdownMenuItem(value: 'VIEWER', child: Text('Viewer (Read only)')),
@@ -1624,9 +1894,11 @@ class _CollaboratorsBottomSheetState extends State<_CollaboratorsBottomSheet> {
                 final target = phoneController.text.trim();
                 if (target.isEmpty) return;
                 Navigator.pop(ctx);
+                final finalPhone = '$countryCode$target';
                 final res = await auth.apiService.inviteCollaborator(
                   tripId: widget.tripId,
-                  phoneNumber: target,
+                  phoneNumber: finalPhone,
+                  userId: resolvedUserId,
                   role: selectedRole,
                   token: user.token,
                 );

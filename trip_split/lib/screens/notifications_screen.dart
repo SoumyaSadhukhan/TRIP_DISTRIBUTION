@@ -7,6 +7,7 @@ import '../models/settlement_proposal.dart';
 import '../providers/auth_provider.dart';
 import '../providers/trip_provider.dart';
 import '../widgets/settlement_popup_dialog.dart';
+import 'friends_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -229,17 +230,41 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     final dateStr = DateFormat('MMM d, h:mm a').format(item.createdAt);
                     final isSettlement = item.type.contains('SETTLEMENT');
                     final isProposal = item.type == 'SETTLEMENT_PROPOSAL';
+                    final isFriendRequest = item.type == 'FRIEND_REQUEST';
+                    final isTripInvite = item.type == 'TRIP_INVITE' || item.type == 'COLLAB_INVITE';
                     final statementRef = (item.settlementId != null && item.settlementId!.isNotEmpty)
                         ? (item.settlementId!.length >= 8 ? 'ST-${item.settlementId!.substring(0, 8).toUpperCase()}' : 'ST-${item.settlementId!.toUpperCase()}')
                         : null;
 
+                    Color iconBgColor = _primaryIndigo.withValues(alpha: 0.1);
+                    Color iconColor = _primaryIndigo;
+                    IconData iconData = Icons.notifications_active_rounded;
+
+                    if (isSettlement) {
+                      iconBgColor = _emerald.withValues(alpha: 0.12);
+                      iconColor = _emerald;
+                      iconData = Icons.receipt_long_rounded;
+                    } else if (isFriendRequest) {
+                      iconBgColor = const Color(0xFF4F46E5).withValues(alpha: 0.12);
+                      iconColor = const Color(0xFF4F46E5);
+                      iconData = Icons.person_add_rounded;
+                    } else if (isTripInvite) {
+                      iconBgColor = const Color(0xFF7C3AED).withValues(alpha: 0.12);
+                      iconColor = const Color(0xFF7C3AED);
+                      iconData = Icons.flight_takeoff_rounded;
+                    }
+
                     return Card(
-                      elevation: isSettlement ? 3 : 0.5,
+                      elevation: (isSettlement || isTripInvite) ? 3 : 0.5,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(18),
                         side: BorderSide(
-                          color: isSettlement ? _emerald.withValues(alpha: 0.4) : Colors.grey.shade200,
-                          width: isSettlement ? 1.5 : 1,
+                          color: isSettlement
+                              ? _emerald.withValues(alpha: 0.4)
+                              : (isTripInvite
+                                  ? const Color(0xFF7C3AED).withValues(alpha: 0.4)
+                                  : (isFriendRequest ? const Color(0xFF4F46E5).withValues(alpha: 0.3) : Colors.grey.shade200)),
+                          width: (isSettlement || isTripInvite) ? 1.5 : 1,
                         ),
                       ),
                       child: Padding(
@@ -253,16 +278,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: isSettlement
-                                        ? _emerald.withValues(alpha: 0.12)
-                                        : _primaryIndigo.withValues(alpha: 0.1),
+                                    color: iconBgColor,
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(
-                                    isSettlement
-                                        ? Icons.receipt_long_rounded
-                                        : Icons.notifications_active_rounded,
-                                    color: isSettlement ? _emerald : _primaryIndigo,
+                                    iconData,
+                                    color: iconColor,
                                     size: 22,
                                   ),
                                 ),
@@ -320,6 +341,30 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                                 style: const TextStyle(fontSize: 11, color: _primaryIndigo, fontWeight: FontWeight.w700),
                                               ),
                                             ),
+                                          if (isTripInvite)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF7C3AED).withValues(alpha: 0.12),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: const Text(
+                                                '✈ Trip Invite',
+                                                style: TextStyle(fontSize: 11, color: Color(0xFF7C3AED), fontWeight: FontWeight.w700),
+                                              ),
+                                            ),
+                                          if (isFriendRequest)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF4F46E5).withValues(alpha: 0.12),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: const Text(
+                                                '👥 Friend Request',
+                                                style: TextStyle(fontSize: 11, color: Color(0xFF4F46E5), fontWeight: FontWeight.w700),
+                                              ),
+                                            ),
                                           if (item.amount > 0)
                                             Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -357,6 +402,109 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                     icon: const Icon(Icons.receipt_long_rounded, size: 16),
                                     label: const Text(
                                       'View Statement & Pay / Edit',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ] else if (isFriendRequest) ...[
+                              const SizedBox(height: 12),
+                              const Divider(height: 1),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  FilledButton.icon(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: const Color(0xFF4F46E5),
+                                      visualDensity: VisualDensity.compact,
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    onPressed: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => const FriendsScreen(initialTab: 1),
+                                        ),
+                                      ).then((_) => _fetchNotifications());
+                                    },
+                                    icon: const Icon(Icons.how_to_reg_rounded, size: 16),
+                                    label: const Text(
+                                      'View in Trip Friends',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ] else if (isTripInvite && item.tripId != null) ...[
+                              const SizedBox(height: 12),
+                              const Divider(height: 1),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  OutlinedButton(
+                                    style: OutlinedButton.styleFrom(
+                                      visualDensity: VisualDensity.compact,
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    onPressed: () async {
+                                      final auth = context.read<AuthProvider>();
+                                      final user = auth.currentUser;
+                                      if (user == null || item.tripId == null) return;
+                                      await auth.apiService.declineTripInvite(tripId: item.tripId!, token: user.token);
+                                      await auth.apiService.markNotificationsRead(notificationId: item.id, token: user.token);
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Trip invitation declined.')),
+                                        );
+                                      }
+                                      _fetchNotifications();
+                                    },
+                                    child: const Text('Decline', style: TextStyle(fontSize: 12)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  FilledButton.icon(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: const Color(0xFF059669),
+                                      visualDensity: VisualDensity.compact,
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    onPressed: () async {
+                                      final auth = context.read<AuthProvider>();
+                                      final user = auth.currentUser;
+                                      if (user == null || item.tripId == null) return;
+                                      final res = await auth.apiService.acceptTripInvite(tripId: item.tripId!, token: user.token);
+                                      if (!mounted) return;
+                                      if (res['success'] == true) {
+                                        await auth.apiService.markNotificationsRead(notificationId: item.id, token: user.token);
+                                        if (!mounted) return;
+                                        final tripProvider = context.read<TripProvider>();
+                                        final trips = await auth.apiService.getTrips(userId: user.id, phone: user.phone, token: user.token);
+                                        if (trips.isNotEmpty) tripProvider.updateFromRemote(trips);
+                                        _fetchNotifications();
+                                        if (!mounted) return;
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Joined "${item.tripName ?? 'Trip'}" successfully!'),
+                                            backgroundColor: const Color(0xFF059669),
+                                          ),
+                                        );
+                                      } else {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text(res['message'] ?? 'Failed to accept invitation.'),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
+                                    label: const Text(
+                                      'Accept to Join Trip',
                                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                                     ),
                                   ),
