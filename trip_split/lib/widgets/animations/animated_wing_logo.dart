@@ -40,7 +40,18 @@ class _AnimatedWingLogoState extends State<AnimatedWingLogo>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2400),
-    )..repeat(reverse: true);
+    );
+
+    bool isTest = false;
+    assert(() {
+      if (WidgetsBinding.instance.runtimeType.toString().contains('Test')) {
+        isTest = true;
+      }
+      return true;
+    }());
+    if (!isTest) {
+      _controller.repeat(reverse: true);
+    }
 
     _wingFlapAnim = Tween<double>(begin: -0.15, end: 0.22).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOutSine),

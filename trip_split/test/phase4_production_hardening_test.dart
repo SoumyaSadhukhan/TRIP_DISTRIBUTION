@@ -1,5 +1,6 @@
 // test/phase4_production_hardening_test.dart
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
@@ -146,7 +147,16 @@ void main() {
         );
         expect(otpRes.statusCode, 200);
         final otpData = jsonDecode(otpRes.body);
-        final otpCode = otpData['data']['otpCode'] ?? '123456';
+        String otpCode = otpData['data']['otpCode'] ?? '';
+        if (otpCode.isEmpty) {
+          final res = await Process.run('sqlcmd', [
+            '-S', 'localhost',
+            '-d', 'SPLIT_BILL_DB',
+            '-E',
+            '-Q', "SET NOCOUNT ON; SELECT TOP 1 otp_code FROM OtpVerification WHERE email = 'testuser4@example.com' AND purpose = 'FORGOT_PASSWORD' AND is_verified = 0 ORDER BY created_at DESC"
+          ]);
+          otpCode = res.stdout.toString().split(RegExp(r'\r?\n')).firstWhere((l) => RegExp(r'^\d{6}$').hasMatch(l.trim()), orElse: () => '123456').trim();
+        }
 
         // Step B: Reset password without JWT
         final resetRes = await http.post(
@@ -212,7 +222,17 @@ void main() {
           }),
         );
         expect(revertOtpRes.statusCode, 200);
-        final revertOtpCode = jsonDecode(revertOtpRes.body)['data']['otpCode'] ?? '123456';
+        final revertOtpData = jsonDecode(revertOtpRes.body);
+        String revertOtpCode = revertOtpData['data']?['otpCode'] ?? '';
+        if (revertOtpCode.isEmpty) {
+          final res = await Process.run('sqlcmd', [
+            '-S', 'localhost',
+            '-d', 'SPLIT_BILL_DB',
+            '-E',
+            '-Q', "SET NOCOUNT ON; SELECT TOP 1 otp_code FROM OtpVerification WHERE email = 'testuser4@example.com' AND purpose = 'FORGOT_PASSWORD' AND is_verified = 0 ORDER BY created_at DESC"
+          ]);
+          revertOtpCode = res.stdout.toString().split(RegExp(r'\r?\n')).firstWhere((l) => RegExp(r'^\d{6}$').hasMatch(l.trim()), orElse: () => '123456').trim();
+        }
 
         final revertRes = await http.post(
           Uri.parse('$baseUrl/auth/reset-password'),
@@ -256,6 +276,20 @@ void main() {
       String? person3Id;
 
       setUpAll(() async {
+        // Refresh User 1 token to handle session rotation
+        final refreshLogin = await http.post(
+          Uri.parse('$baseUrl/auth/login'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'phone': '9800000001',
+            'email': 'testuser1@example.com',
+            'password': 'Test@12345',
+          }),
+        );
+        if (refreshLogin.statusCode == 200) {
+          user1Token = jsonDecode(refreshLogin.body)['data']['token'];
+        }
+
         // Create an isolated test trip to avoid touching Goa Vacation 2026 balances
         final tripRes = await http.post(
           Uri.parse('$baseUrl/trips'),
@@ -723,6 +757,19 @@ void main() {
     // =========================================================================
     group('FINANCIAL INTEGRITY: Invariants & Baseline Preservation', () {
       test('Goa Vacation 2026 balances remain strictly reconciled to zero', () async {
+        final refreshLogin = await http.post(
+          Uri.parse('$baseUrl/auth/login'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'phone': '9800000001',
+            'email': 'testuser1@example.com',
+            'password': 'Test@12345',
+          }),
+        );
+        if (refreshLogin.statusCode == 200) {
+          user1Token = jsonDecode(refreshLogin.body)['data']['token'];
+        }
+
         final tripsRes = await http.get(
           Uri.parse('$baseUrl/trips'),
           headers: {'Authorization': 'Bearer $user1Token'},

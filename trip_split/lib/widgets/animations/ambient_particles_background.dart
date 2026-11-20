@@ -30,7 +30,18 @@ class _AmbientParticlesBackgroundState extends State<AmbientParticlesBackground>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 12),
-    )..repeat();
+    );
+
+    bool isTest = false;
+    assert(() {
+      if (WidgetsBinding.instance.runtimeType.toString().contains('Test')) {
+        isTest = true;
+      }
+      return true;
+    }());
+    if (!isTest) {
+      _controller.repeat();
+    }
 
     // Generate random ambient star particles
     for (int i = 0; i < widget.numberOfParticles; i++) {

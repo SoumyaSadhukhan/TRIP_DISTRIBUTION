@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 /// Smooth Staggered Slide-up and Fade-in entrance animation with Spring curve.
@@ -24,6 +25,7 @@ class _StaggeredEntranceState extends State<StaggeredEntrance>
   late AnimationController _controller;
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
+  Timer? _delayTimer;
 
   @override
   void initState() {
@@ -46,7 +48,7 @@ class _StaggeredEntranceState extends State<StaggeredEntrance>
     if (widget.delay == Duration.zero) {
       _controller.forward();
     } else {
-      Future.delayed(widget.delay, () {
+      _delayTimer = Timer(widget.delay, () {
         if (mounted) _controller.forward();
       });
     }
@@ -54,6 +56,7 @@ class _StaggeredEntranceState extends State<StaggeredEntrance>
 
   @override
   void dispose() {
+    _delayTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }

@@ -49,5 +49,7 @@ TripDistribution.LoadTesting/
 
 # Local data cache
 data/
+logs/
+.auth_cache.json
 
 

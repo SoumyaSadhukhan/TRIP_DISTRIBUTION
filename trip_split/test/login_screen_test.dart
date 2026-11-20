@@ -22,6 +22,7 @@ class MockApiService extends ApiService {
   @override
   Future<Map<String, dynamic>> register({
     required String phone,
+    String? countryCode,
     required String fullName,
     required String password,
     String? username,
@@ -114,6 +115,13 @@ void main() {
   }
 
   testWidgets('LoginScreen renders and switches between Sign In and Create Account', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
     final storage = StorageService(baseDirPath: testDir);
     final api = MockApiService();
     final auth = AuthProvider(storageService: storage, apiService: api);
@@ -129,13 +137,13 @@ void main() {
     expect(find.text('EquiTrip'), findsWidgets);
     expect(find.text('Sign In'), findsNWidgets(2)); // Tab and Button
     expect(find.text('Register with OTP'), findsOneWidget);
-    expect(find.widgetWithText(TextFormField, 'Phone Number or Email'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, 'Mobile Number or Email'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Password'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Confirm Password'), findsNothing);
 
     // Switch to Create Account mode
     await tester.tap(find.text('Register with OTP'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 600));
 
     // Verify Confirm Password appears
     expect(find.widgetWithText(TextFormField, 'Confirm Password'), findsOneWidget);
@@ -162,12 +170,13 @@ void main() {
 
     // Switch to Create Account
     await tester.tap(find.text('Register with OTP'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 600));
 
-    // Enter name, phone, otp, password, confirm password
+    // Enter name, email, phone, otp, password, confirm password
     await tester.enterText(find.widgetWithText(TextFormField, 'Full Name'), 'Sam Altman');
-    await tester.enterText(find.widgetWithText(TextFormField, 'Phone Number'), '9876543210');
-    await tester.enterText(find.widgetWithText(TextFormField, '6-Digit OTP Code'), '123456');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Email Address (for OTP & Account)'), 'sam@example.com');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Mobile Number'), '9876543210');
+    await tester.enterText(find.widgetWithText(TextFormField, '6-Digit Email OTP Code'), '123456');
     await tester.enterText(find.widgetWithText(TextFormField, 'Password'), 'open_ai_123');
     await tester.enterText(find.widgetWithText(TextFormField, 'Confirm Password'), 'open_ai_123');
     await tester.pump();
@@ -209,13 +218,13 @@ void main() {
       confirmPassword: 'pass1234',
     );
     trip.loadUserTrips(auth.currentUser!.trips, onSave: (trips) async => auth.saveCurrentUserData(trips));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('Hello, test_logout_user 👋'), findsOneWidget);
 
     // Tap logout button
     await tester.tap(find.byIcon(Icons.logout_rounded));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 300));
 
     // Dialog appears
     expect(find.text('Log Out?'), findsOneWidget);

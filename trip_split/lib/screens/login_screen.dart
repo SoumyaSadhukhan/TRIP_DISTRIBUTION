@@ -49,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
+      if (mounted && _isSignUp != (_tabController.index == 1)) {
         setState(() {
           _isSignUp = _tabController.index == 1;
         });
@@ -917,6 +917,12 @@ class _LoginScreenState extends State<LoginScreen>
                                     ),
                                     child: TabBar(
                                       controller: _tabController,
+                                      onTap: (index) {
+                                        if (mounted) {
+                                          setState(() => _isSignUp = index == 1);
+                                          context.read<AuthProvider>().clearMessages();
+                                        }
+                                      },
                                       indicator: BoxDecoration(
                                         gradient: const LinearGradient(
                                           colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
@@ -1432,13 +1438,16 @@ class _LoginScreenState extends State<LoginScreen>
                                           ),
                                           child: (_isActionLoading || auth.isLoading)
                                               ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                                              : const Row(
-                                                  mainAxisAlignment: MainAxisAlignment.center,
-                                                  children: [
-                                                    Text('Create Account & Verify OTP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                                                    SizedBox(width: 8),
-                                                    Icon(Icons.how_to_reg_rounded, color: Colors.white, size: 20),
-                                                  ],
+                                              : const FittedBox(
+                                                  fit: BoxFit.scaleDown,
+                                                  child: Row(
+                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    children: [
+                                                      Text('Create Account & Verify OTP', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                                                      SizedBox(width: 8),
+                                                      Icon(Icons.how_to_reg_rounded, color: Colors.white, size: 20),
+                                                    ],
+                                                  ),
                                                 ),
                                         ),
                                       ),
