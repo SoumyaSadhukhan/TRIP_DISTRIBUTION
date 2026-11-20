@@ -232,6 +232,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     final isProposal = item.type == 'SETTLEMENT_PROPOSAL';
                     final isFriendRequest = item.type == 'FRIEND_REQUEST';
                     final isTripInvite = item.type == 'TRIP_INVITE' || item.type == 'COLLAB_INVITE';
+                    final isTripAccepted = item.type == 'TRIP_INVITE_ACCEPTED';
+                    final isTripDeclined = item.type == 'TRIP_INVITE_DECLINED';
                     final statementRef = (item.settlementId != null && item.settlementId!.isNotEmpty)
                         ? (item.settlementId!.length >= 8 ? 'ST-${item.settlementId!.substring(0, 8).toUpperCase()}' : 'ST-${item.settlementId!.toUpperCase()}')
                         : null;
@@ -252,19 +254,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       iconBgColor = const Color(0xFF7C3AED).withValues(alpha: 0.12);
                       iconColor = const Color(0xFF7C3AED);
                       iconData = Icons.flight_takeoff_rounded;
+                    } else if (isTripAccepted) {
+                      iconBgColor = _emerald.withValues(alpha: 0.12);
+                      iconColor = _emerald;
+                      iconData = Icons.check_circle_rounded;
+                    } else if (isTripDeclined) {
+                      iconBgColor = Colors.grey.shade200;
+                      iconColor = Colors.grey.shade600;
+                      iconData = Icons.cancel_rounded;
                     }
 
+                    final isPositiveAction = isSettlement || isTripInvite || isTripAccepted;
                     return Card(
-                      elevation: (isSettlement || isTripInvite) ? 3 : 0.5,
+                      elevation: isPositiveAction ? 3 : 0.5,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(18),
                         side: BorderSide(
-                          color: isSettlement
+                          color: (isSettlement || isTripAccepted)
                               ? _emerald.withValues(alpha: 0.4)
                               : (isTripInvite
                                   ? const Color(0xFF7C3AED).withValues(alpha: 0.4)
-                                  : (isFriendRequest ? const Color(0xFF4F46E5).withValues(alpha: 0.3) : Colors.grey.shade200)),
-                          width: (isSettlement || isTripInvite) ? 1.5 : 1,
+                                  : (isFriendRequest ? const Color(0xFF4F46E5).withValues(alpha: 0.3) : Colors.grey.shade300)),
+                          width: isPositiveAction ? 1.5 : 1,
                         ),
                       ),
                       child: Padding(
@@ -351,6 +362,30 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                               child: const Text(
                                                 '✈ Trip Invite',
                                                 style: TextStyle(fontSize: 11, color: Color(0xFF7C3AED), fontWeight: FontWeight.w700),
+                                              ),
+                                            ),
+                                          if (isTripAccepted)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: _emerald.withValues(alpha: 0.12),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: const Text(
+                                                '✓ Joined Trip',
+                                                style: TextStyle(fontSize: 11, color: _emerald, fontWeight: FontWeight.w700),
+                                              ),
+                                            ),
+                                          if (isTripDeclined)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: Colors.grey.shade200,
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                'Declined',
+                                                style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w700),
                                               ),
                                             ),
                                           if (isFriendRequest)
@@ -452,13 +487,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                     ),
                                     onPressed: () async {
                                       final auth = context.read<AuthProvider>();
+                                      final scaffoldMessenger = ScaffoldMessenger.of(context);
                                       final user = auth.currentUser;
                                       if (user == null || item.tripId == null) return;
+                                      setState(() {
+                                        _notifications[index] = NotificationModel(
+                                          id: item.id,
+                                          userId: item.userId,
+                                          tripId: item.tripId,
+                                          settlementId: item.settlementId,
+                                          title: 'Trip Request Declined',
+                                          message: 'You declined the trip request${item.tripName != null && item.tripName!.isNotEmpty ? ' to join "${item.tripName}"' : ''}',
+                                          type: 'TRIP_INVITE_DECLINED',
+                                          tripName: item.tripName,
+                                          amount: item.amount,
+                                          isRead: true,
+                                          createdAt: item.createdAt,
+                                        );
+                                      });
                                       await auth.apiService.declineTripInvite(tripId: item.tripId!, token: user.token);
                                       await auth.apiService.markNotificationsRead(notificationId: item.id, token: user.token);
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Trip invitation declined.')),
+                                      if (mounted) {
+                                        scaffoldMessenger.showSnackBar(
+                                          const SnackBar(content: Text('You declined the trip request')),
                                         );
                                       }
                                       _fetchNotifications();
@@ -475,26 +526,43 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                     ),
                                     onPressed: () async {
                                       final auth = context.read<AuthProvider>();
+                                      final tripProvider = context.read<TripProvider>();
+                                      final scaffoldMessenger = ScaffoldMessenger.of(context);
                                       final user = auth.currentUser;
                                       if (user == null || item.tripId == null) return;
+                                      setState(() {
+                                        _notifications[index] = NotificationModel(
+                                          id: item.id,
+                                          userId: item.userId,
+                                          tripId: item.tripId,
+                                          settlementId: item.settlementId,
+                                          title: 'Trip Request Accepted',
+                                          message: 'You accepted the trip request${item.tripName != null && item.tripName!.isNotEmpty ? ' to join "${item.tripName}"' : ''}',
+                                          type: 'TRIP_INVITE_ACCEPTED',
+                                          tripName: item.tripName,
+                                          amount: item.amount,
+                                          isRead: true,
+                                          createdAt: item.createdAt,
+                                        );
+                                      });
                                       final res = await auth.apiService.acceptTripInvite(tripId: item.tripId!, token: user.token);
                                       if (!mounted) return;
                                       if (res['success'] == true) {
                                         await auth.apiService.markNotificationsRead(notificationId: item.id, token: user.token);
                                         if (!mounted) return;
-                                        final tripProvider = context.read<TripProvider>();
                                         final trips = await auth.apiService.getTrips(userId: user.id, phone: user.phone, token: user.token);
                                         if (trips.isNotEmpty) tripProvider.updateFromRemote(trips);
                                         _fetchNotifications();
                                         if (!mounted) return;
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        scaffoldMessenger.showSnackBar(
                                           SnackBar(
                                             content: Text('Joined "${item.tripName ?? 'Trip'}" successfully!'),
                                             backgroundColor: const Color(0xFF059669),
                                           ),
                                         );
                                       } else {
-                                        ScaffoldMessenger.of(context).showSnackBar(
+                                        _fetchNotifications();
+                                        scaffoldMessenger.showSnackBar(
                                           SnackBar(
                                             content: Text(res['message'] ?? 'Failed to accept invitation.'),
                                             backgroundColor: Colors.red,
@@ -509,6 +577,64 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                     ),
                                   ),
                                 ],
+                              ),
+                            ] else if (isTripAccepted) ...[
+                              const SizedBox(height: 12),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF059669).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.3)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.check_circle_rounded, color: Color(0xFF059669), size: 16),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        item.message.toLowerCase().contains('you accepted')
+                                            ? 'You accepted the trip request'
+                                            : item.message,
+                                        style: const TextStyle(
+                                          color: Color(0xFF059669),
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ] else if (isTripDeclined) ...[
+                              const SizedBox(height: 12),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.grey.shade300),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.cancel_rounded, color: Colors.grey.shade600, size: 16),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        item.message.toLowerCase().contains('you declined')
+                                            ? 'You declined the trip request'
+                                            : item.message,
+                                        style: TextStyle(
+                                          color: Colors.grey.shade700,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ],
