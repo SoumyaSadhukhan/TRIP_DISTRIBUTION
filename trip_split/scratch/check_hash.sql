@@ -1,0 +1,3 @@
+SELECT 
+    CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', N'test'), 2) AS SqlNvarchar,
+    CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', 'test'), 2) AS SqlVarchar;

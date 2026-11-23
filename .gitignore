@@ -31,3 +31,12 @@ logggg/
 **/trip_split/android/local.properties
 **/trip_split/ios/Pods/
 **/trip_split/ios/.symlinks/
+
+# Database Backup Files & Dumps
+*.bak
+*.trn
+*.mdf
+*.ldf
+backups/
+**/backups/
+**/scratch/temp_*.sql
